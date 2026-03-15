@@ -27,7 +27,8 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 | | N=4 | N=8 | N=16 | N=32 | N=64 |
 |---|---|---|---|---|---|
-| max error | 2.54e-01 | 1.08e-01 | 7.18e-03 | 4.04e-07 | 3.89e-16 |
+| max error    | 2.54e-01 | 1.08e-01 | 7.18e-03 | 4.04e-07 | 3.89e-16 |
+| cpu time (sec) | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 |
 
 ![Table 1](examples/table_1.png)
 
@@ -38,7 +39,9 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---|---|---|---|
+| COS msec      | 0.1066 | 0.1073 | 0.1199 | 0.1508 | 0.2039 |
 | COS max error | 2.43e-07 | 1.81e-14 | 1.81e-14 | 1.81e-14 | 1.81e-14 |
+| CM msec       | 0.0428 | 0.0429 | 0.0466 | 0.0536 | 0.0688 |
 | CM max error  | 1.29e+02 | 2.57e+02 | 4.80e+01 | 1.29e+00 | 1.29e+00 |
 
 ![Table 2](examples/table_2.png)
@@ -50,7 +53,8 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 | | N=40 | N=60 | N=80 | N=100 | N=120 | N=140 |
 |---|---|---|---|---|---|---|
-| COS error | 3.67e-11 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 |
+| error          | 3.67e-11 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 |
+| cpu time (msec) | 0.0283 | 0.0297 | 0.0317 | 0.0326 | 0.0340 | 0.0348 |
 
 ![Table 3](examples/table_3.png)
 
