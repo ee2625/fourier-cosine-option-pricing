@@ -22,16 +22,29 @@ The focus is on:
 
 ## Key Results
 
-### BSM model — COS vs analytic (Table 2 reproduction)
+### Density recovery from characteristic function (Table 1 reproduction)
+f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
+
+| N  | max error  |
+|----|------------|
+| 4  | 2.54e-01   |
+| 8  | 1.08e-01   |
+| 16 | 7.18e-03   |
+| 32 | 4.04e-07   |
+| 64 | 3.89e-16   |
+
+**Exponential convergence: errors decrease ~10x per doubling of N, reaching machine precision at N=64. This demonstrates the mathematical foundation of the entire COS method.**
+
+### BSM model — COS vs Carr-Madan (Table 2 reproduction)
 σ=0.25, r=0.1, q=0, T=0.1, S=100, K=80/100/120
 
-| N | COS max error | Carr-Madan max error |
-|---|---|---|
-| 32  | 2.43e-07 | 1.29e+02 |
-| 64  | 1.81e-14 | 2.57e+02 |
-| 128 | 1.81e-14 | 4.80e+01 |
-| 256 | 1.81e-14 | 1.29e+00 |
-| 512 | 1.81e-14 | 1.29e+00 |
+| N   | COS max error | Carr-Madan max error |
+|-----|---------------|----------------------|
+| 32  | 2.43e-07      | 1.29e+02             |
+| 64  | 1.81e-14      | 2.57e+02             |
+| 128 | 1.81e-14      | 4.80e+01             |
+| 256 | 1.81e-14      | 1.29e+00             |
+| 512 | 1.81e-14      | 1.29e+00             |
 
 **COS reaches machine precision at N=64. Carr-Madan requires N>512 for comparable accuracy.**
 
@@ -99,7 +112,8 @@ fourier-cosine-option-pricing/
 │   └── test_cos_method.py      # 19 tests (BSM + Heston)
 ├── examples/
 │   ├── example_european_option.py   # full demo: BSM + Heston + IV smile
-│   ├── GBM_cos_vs_carr_madan.py     # Table 2 reproduction
+│   ├── table_1.py                   # Table 1: density recovery from CF
+│   ├── GBM_cos_vs_carr_madan.py     # Table 2: COS vs Carr-Madan
 │   └── table_3.py                   # Table 3: cash-or-nothing option
 └── docs/
     └── paper_notes.md
@@ -132,14 +146,17 @@ m.price(np.array([90, 95, 100, 105, 110]), spot=100, texp=1.0)
 ## Running the examples
 
 ```bash
-# Full demo (BSM accuracy, convergence, Heston, implied vol smile)
-PYTHONPATH=src python examples/example_european_option.py
+# Table 1: density recovery from characteristic function
+PYTHONPATH=src python examples/table_1.py
 
 # Table 2: COS vs Carr-Madan convergence comparison
 PYTHONPATH=src python examples/GBM_cos_vs_carr_madan.py
 
-# Table 3: Cash-or-nothing digital option
+# Table 3: cash-or-nothing digital option
 PYTHONPATH=src python examples/table_3.py
+
+# Full demo (BSM accuracy, convergence, Heston, implied vol smile)
+PYTHONPATH=src python examples/example_european_option.py
 
 # Run all tests
 python -m pytest tests/test_cos_method.py -v
