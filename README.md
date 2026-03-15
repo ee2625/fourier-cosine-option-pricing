@@ -71,6 +71,3 @@ Implementation and validation work in progress.
 
 Fang, F. and Oosterlee, C.W.
 *A Novel Pricing Method for European Options Based on Fourier-Cosine Series Expansions*
-
-```
-```
