@@ -25,13 +25,9 @@ The focus is on:
 ### Density recovery from characteristic function (Table 1 reproduction)
 f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
-| N  | max error  |
-|----|------------|
-| 4  | 2.54e-01   |
-| 8  | 1.08e-01   |
-| 16 | 7.18e-03   |
-| 32 | 4.04e-07   |
-| 64 | 3.89e-16   |
+| | N=4 | N=8 | N=16 | N=32 | N=64 |
+|---|---|---|---|---|---|
+| max error | 2.54e-01 | 1.08e-01 | 7.18e-03 | 4.04e-07 | 3.89e-16 |
 
 ![Table 1](examples/table_1.png)
 
@@ -40,13 +36,10 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 ### BSM model — COS vs Carr-Madan (Table 2 reproduction)
 σ=0.25, r=0.1, q=0, T=0.1, S=100, K=80/100/120
 
-| N   | COS max error | Carr-Madan max error |
-|-----|---------------|----------------------|
-| 32  | 2.43e-07      | 1.29e+02             |
-| 64  | 1.81e-14      | 2.57e+02             |
-| 128 | 1.81e-14      | 4.80e+01             |
-| 256 | 1.81e-14      | 1.29e+00             |
-| 512 | 1.81e-14      | 1.29e+00             |
+| | N=32 | N=64 | N=128 | N=256 | N=512 |
+|---|---|---|---|---|---|
+| COS max error | 2.43e-07 | 1.81e-14 | 1.81e-14 | 1.81e-14 | 1.81e-14 |
+| CM max error  | 1.29e+02 | 2.57e+02 | 4.80e+01 | 1.29e+00 | 1.29e+00 |
 
 ![Table 2](examples/table_2.png)
 
@@ -55,14 +48,9 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 ### Cash-or-nothing digital option — COS (Table 3 reproduction)
 σ=0.2, r=0.05, q=0, T=0.1, S=100, K=120
 
-| N   | COS error  |
-|-----|------------|
-| 40  | 3.67e-11   |
-| 60  | 2.87e-16   |
-| 80  | 2.87e-16   |
-| 100 | 2.87e-16   |
-| 120 | 2.87e-16   |
-| 140 | 2.87e-16   |
+| | N=40 | N=60 | N=80 | N=100 | N=120 | N=140 |
+|---|---|---|---|---|---|---|
+| COS error | 3.67e-11 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 | 2.87e-16 |
 
 ![Table 3](examples/table_3.png)
 
