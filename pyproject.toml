@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cos_pricing"
+version = "0.1.0"
+description = "Implementation of the Fang-Oosterlee COS method for European option pricing"
+authors = [
+    {name = "Your Team"}
+]
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib"
+]
