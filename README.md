@@ -33,6 +33,8 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 | 32 | 4.04e-07   |
 | 64 | 3.89e-16   |
 
+![Table 1](examples/table_1.png)
+
 **Exponential convergence: errors decrease ~10x per doubling of N, reaching machine precision at N=64. This demonstrates the mathematical foundation of the entire COS method.**
 
 ### BSM model — COS vs Carr-Madan (Table 2 reproduction)
@@ -45,6 +47,8 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 | 128 | 1.81e-14      | 4.80e+01             |
 | 256 | 1.81e-14      | 1.29e+00             |
 | 512 | 1.81e-14      | 1.29e+00             |
+
+![Table 2](examples/table_2.png)
 
 **COS reaches machine precision at N=64. Carr-Madan requires N>512 for comparable accuracy.**
 
@@ -59,6 +63,8 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 | 100 | 2.87e-16   |
 | 120 | 2.87e-16   |
 | 140 | 2.87e-16   |
+
+![Table 3](examples/table_3.png)
 
 **Exponential convergence holds for discontinuous payoffs when analytic coefficients are used — confirming Theorem 3.1 of the paper.**
 
