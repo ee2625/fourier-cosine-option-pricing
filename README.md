@@ -44,3 +44,33 @@ fourier-cosine-option-pricing/
 │   └── example_european_option.py
 └── docs/
     └── paper_notes.md
+````
+
+## Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/ee2625/fourier-cosine-option-pricing.git
+cd fourier-cosine-option-pricing
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Current Status
+
+Initial repository structure created.
+Implementation and validation work in progress.
+
+
+## References
+
+Fang, F. and Oosterlee, C.W.
+*A Novel Pricing Method for European Options Based on Fourier-Cosine Series Expansions*
+
+```
+```
