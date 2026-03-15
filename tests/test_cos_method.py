@@ -204,7 +204,7 @@ class TestCosEngine:
         fwd, df     = 100.0, 1.0
         # BSM CF manually
         def cf(u):
-            return np.exp(-0.5 * sigma**2 * texp * u * (u - 1j))
+            return np.exp(-0.5 * sigma**2 * texp * u * (u + 1j))
         p_cos = cos_price(cf, texp, 100.0, fwd, df, cp=1, n_cos=128,
                           trunc_range=(-5.0, 5.0))
         p_ref = bsm_price(100.0, 100.0, sigma, texp)
