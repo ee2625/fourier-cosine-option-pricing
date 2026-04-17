@@ -119,7 +119,7 @@ is the core optimization target (details below).
 
 The COS price of a European option is (Eq. 21 of the paper):
 
-$$V(x, t) = e^{-r\tau} \, K \sum_{k=0}^{N-1}{\!}' \mathrm{Re}\!\left[\, \varphi\!\left(\tfrac{k\pi}{b-a}\right) \exp\!\left(i\,k\pi\,\tfrac{x-a}{b-a}\right) \,\right] V_k$$
+$$V(x, t) = K \, e^{-r\tau} \, \mathrm{Re} \left[ \sum_{k=0}^{N-1}{}' \varphi \left( \frac{k\pi}{b-a} \right) \exp \left( i k \pi \frac{x-a}{b-a} \right) V_k \right]$$
 
 where:
 - $\varphi(u)$ is the characteristic function of $\log(S_T/S_0)$ under the risk-neutral measure
@@ -147,7 +147,7 @@ Because the characteristic function only needs to be evaluated at $N$ frequencie
 
 ## Improvements over the paper for Heston
 
-The paper's algorithm is already fast and accurate. The modifications below preserve the algorithm's structure and published guarantees, but let the implementation strictly beat Tables 4–6 on error and runtime across every row — on any modern machine. Each change cites published literature.
+The paper's algorithm is already fast and accurate. The modifications below preserve the algorithm's structure and published guarantees, but let the implementation strictly beat Tables 4–6 on error and runtime across every row — on any modern machine.
 
 **1. Use the paper's own Heston $\sigma$-heuristic for the truncation range.**
 Eq. 49 is a general-purpose range-setting rule that plugs in the distribution's cumulants $c_2$ and $c_4$. In §5.2, the same paper proposes a simpler heuristic *specifically for Heston*: take $\sigma \approx \sqrt{\bar u + v_0 \eta}$ and set the half-width to $L\sigma$. For typical Heston parameter sets this value is closer to the density's true spread than the general cumulant-based estimate, producing a tighter $[a, b]$ and lower truncation error at a fixed $N$.
