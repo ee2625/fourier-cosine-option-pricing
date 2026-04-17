@@ -49,7 +49,7 @@ class CosABC(opt.OptABC, abc.ABC):
         raise NotImplementedError
 
     def charfunc_logprice(self, u, texp):
-        """Characteristic function φ(u) = MGF(i·u)."""
+        """Characteristic function phi(u) = MGF(i*u)."""
         return self.mgf_logprice(1j * u, texp)
 
     # ------------------------------------------------------------------
@@ -93,7 +93,7 @@ class CosABC(opt.OptABC, abc.ABC):
     @staticmethod
     def _chi(k, u, a, c, d):
         """
-        Eq. (22):  ∫_c^d  exp(x) cos(k π (x−a)/(b−a)) dx
+        Eq. (22): integral from c to d of exp(x) * cos(k*pi*(x-a)/(b-a)) dx
 
         Broadcasting convention: u has shape (1, N), c and d have
         shape (M, 1) so the result has shape (M, N).
@@ -109,7 +109,7 @@ class CosABC(opt.OptABC, abc.ABC):
     @staticmethod
     def _psi(k, u, a, c, d):
         """
-        Eq. (23):  ∫_c^d  cos(k π (x−a)/(b−a)) dx.
+        Eq. (23): integral from c to d of cos(k*pi*(x-a)/(b-a)) dx.
         k=0 handled separately to avoid division by zero.
         """
         safe_u = np.where(k == 0, 1.0, u)
@@ -127,15 +127,15 @@ class CosABC(opt.OptABC, abc.ABC):
         """
         European call/put price via the COS method.
 
-        Fully vectorised over *strike* and *cp*.  The dominant cost is
-        one  (M × N)  matrix-vector multiply, where M = len(strikes)
+        Fully vectorised over *strike* and *cp*. The dominant cost is
+        one (M x N) matrix-vector multiply, where M = len(strikes)
         and N = self.n_cos.
 
         Args:
-            strike: strike price(s) – scalar or array shape (M,).
+            strike: strike price(s) - scalar or array shape (M,).
             spot:   spot (or forward if ``is_fwd=True``) price.
             texp:   time to expiry.
-            cp:     +1 call / −1 put (scalar or array matching strike).
+            cp:     +1 call / -1 put (scalar or array matching strike).
 
         Returns:
             Option price(s) matching the broadcast shape of (strike, cp).
@@ -154,23 +154,23 @@ class CosABC(opt.OptABC, abc.ABC):
         k_arr = np.arange(self.n_cos)          # (N,)
         u_arr = k_arr * np.pi / ba             # (N,)
 
-        # Characteristic function with phase shift exp(−i u a)
+        # Characteristic function with phase shift exp(-i*u*a)
         cf   = self.charfunc_logprice(u_arr, texp)   # (N,) complex
         cf_s = cf * np.exp(-1j * u_arr * a)
-        cf_s[0] *= 0.5                               # prime-sum (k=0 gets ½)
+        cf_s[0] *= 0.5                               # prime-sum (k=0 gets 1/2)
         cf_re = cf_s.real                            # (N,)
 
-        # Payoff coefficients – shape (M, N)
+        # Payoff coefficients - shape (M, N)
         log_kk = np.clip(np.log(kk), a, b)[:, None] # (M, 1)
         u  = u_arr[None, :]                          # (1, N)
         k  = k_arr[None, :]                          # (1, N)
         kk_c = kk[:, None]                           # (M, 1)
 
-        # Call:  (2/ba) * [ chi(log_kk, b) − K/F · ψ(log_kk, b) ]
+        # Call:  (2/ba) * [ chi(log_kk, b) - K/F * psi(log_kk, b) ]
         W_call = (2.0 / ba) * (
             self._chi(k, u, a, log_kk, b) - kk_c * self._psi(k, u, a, log_kk, b)
         )
-        # Put:   (2/ba) * [ K/F · ψ(a, log_kk) − chi(a, log_kk) ]
+        # Put:   (2/ba) * [ K/F * psi(a, log_kk) - chi(a, log_kk) ]
         W_put = (2.0 / ba) * (
             kk_c * self._psi(k, u, a, a, log_kk) - self._chi(k, u, a, a, log_kk)
         )
@@ -195,7 +195,7 @@ class BsmCos(CosABC):
     Black-Scholes-Merton European option pricing via the COS method.
 
     Uses analytic BSM cumulants (c4 = 0), giving a tight truncation range
-    and near machine-precision accuracy for N ≥ 64.
+    and near machine-precision accuracy for N >= 64.
 
     Examples:
         >>> import numpy as np
@@ -206,11 +206,11 @@ class BsmCos(CosABC):
     """
 
     def mgf_logprice(self, uu, texp):
-        """BSM log-price MGF:  exp(−½ σ² T · u · (1−u))."""
+        """BSM log-price MGF: exp(-0.5 * sigma^2 * T * u * (1 - u))."""
         return np.exp(-0.5 * self.sigma**2 * texp * uu * (1.0 - uu))
 
     def _cumulants(self, texp):
-        """Exact BSM cumulants.  c4 = 0 → minimal truncation range."""
+        """Exact BSM cumulants. c4 = 0 -> minimal truncation range."""
         s2t = self.sigma**2 * texp
         return -0.5 * s2t, s2t, 0.0, 0.0
 
@@ -225,17 +225,17 @@ class HestonCos(heston.HestonABC, CosABC):
     via the COS method of Fang & Oosterlee (2008).
 
     Parameters (PyFENG ``SvABC`` convention):
-        sigma  – initial variance V₀
-        vov    – vol-of-vol η
-        mr     – mean-reversion speed κ
-        rho    – correlation ρ
-        theta  – long-run variance V̄  (defaults to sigma)
+        sigma  - initial variance V0
+        vov    - vol-of-vol (eta)
+        mr     - mean-reversion speed (kappa)
+        rho    - correlation (rho)
+        theta  - long-run variance V-bar (defaults to sigma)
 
     The CF uses the Lord-Kahl (2010) branch-cut-safe formulation,
     identical to ``HestonFft``, so both pricers can be cross-validated.
     Analytic cumulants from F&O (2008) Appendix A set the truncation
-    range.  For parameters violating the Feller condition (2κV̄ < η²)
-    or maturities T > 5, increase ``n_cos`` (e.g. ``m.n_cos = 512``).
+    range. For parameters violating the Feller condition (2*kappa*V-bar
+    < eta^2) or maturities T > 5, increase ``n_cos`` (e.g. ``m.n_cos = 512``).
 
     Examples:
         >>> import numpy as np

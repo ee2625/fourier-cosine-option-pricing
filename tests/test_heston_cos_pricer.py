@@ -62,7 +62,7 @@ def test_L_sensitivity():
 
 def test_put_call_parity():
     """
-    Parity holds up to the truncation tail of the e^y·f(y) integral.
+    Parity holds up to the truncation tail of the exp(y)*f(y) integral.
     At L=12, T=1 the tail loss is ~5e-5; tighter L→larger c2 requires larger N.
     """
     m = HestonCOSPricer(**PAPER_PARAMS)

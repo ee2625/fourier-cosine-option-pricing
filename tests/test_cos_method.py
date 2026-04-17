@@ -54,7 +54,7 @@ class TestBsmCos:
         assert np.max(np.abs(cos_vals - refs)) < 1e-10
 
     def test_put_call_parity(self, bsm_params):
-        """C − P = df · (F − K)  to < 1e-10."""
+        """C - P = df * (F - K) to < 1e-10."""
         m = BsmModel(**bsm_params)
         spot, texp = 100.0, 1.0
         for strike in [90.0, 100.0, 110.0]:
@@ -85,13 +85,13 @@ class TestBsmCos:
         assert abs(m8.price(100, 100, 1.0, n_cos=64) - ref) < 1e-10  # converged
 
     def test_scalar_output(self, bsm_params):
-        """Scalar strike → scalar output."""
+        """Scalar strike -> scalar output."""
         m = BsmModel(**bsm_params)
         p = m.price(100.0, 100.0, 1.0)
         assert isinstance(p, float)
 
     def test_array_output_shape(self, bsm_params):
-        """Array strike → array with matching shape."""
+        """Array strike -> array with matching shape."""
         m = BsmModel(**bsm_params)
         K = np.linspace(90, 110, 7)
         p = m.price(K, 100.0, 1.0)
@@ -105,7 +105,7 @@ class TestBsmCos:
         assert p < 0.01  # K=200, S=100, sigma=0.2, T=1
 
     def test_itm_deep_call(self, bsm_params):
-        """Deep ITM call: price ≈ fwd − K (discounted)."""
+        """Deep ITM call: price ~ fwd - K (discounted)."""
         m = BsmModel(**bsm_params)
         spot, strike, texp = 100.0, 50.0, 1.0
         fwd = spot * np.exp((bsm_params['intr'] - bsm_params['divr']) * texp)

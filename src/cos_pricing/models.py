@@ -2,9 +2,9 @@
 Black-Scholes-Merton pricing model for use with the generic COS engine.
 
 Exposes:
-    • char_func(texp)   →  callable  u ↦ φ(u)
-    • trunc_range(texp) →  (a, b)
-    • price(strike, spot, texp, cp)
+    - char_func(texp)   -> callable  u |-> phi(u)
+    - trunc_range(texp) -> (a, b)
+    - price(strike, spot, texp, cp)
 
 Heston pricing lives in ``heston_cos_pricer.py`` (paper-faithful Section 4 form).
 
@@ -22,7 +22,7 @@ class BsmModel:
 
     Parameters
     ----------
-    sigma : float  Constant volatility σ.
+    sigma : float  Constant volatility (sigma).
     intr  : float  Continuously compounded risk-free rate r.  Default 0.
     divr  : float  Continuous dividend yield q.  Default 0.
 
@@ -44,21 +44,21 @@ class BsmModel:
         """
         BSM characteristic function of log(S_T / F).
 
-        φ(u) = E[exp(i·u·X)]  where X = log(S_T/F) ~ N(−½σ²T, σ²T)
-             = exp(−½σ²T · u · (u + i))
+        phi(u) = E[exp(i*u*X)]  where X = log(S_T/F) ~ N(-0.5*sigma^2*T, sigma^2*T)
+               = exp(-0.5 * sigma^2 * T * u * (u + i))
 
-        Derived by substituting uu = i·u into the MGF
-            M(uu) = exp(−½σ²T · uu · (1 − uu))
+        Derived by substituting uu = i*u into the MGF
+            M(uu) = exp(-0.5 * sigma^2 * T * uu * (1 - uu))
         """
         sig2t = self.sigma**2 * texp
         def cf(u):
-            uu = 1j * u                            # uu = i·u  (complex)
+            uu = 1j * u                            # uu = i*u  (complex)
             return np.exp(-0.5 * sig2t * uu * (1.0 - uu))
         return cf
 
     def trunc_range(self, texp, L=12.0):
         """
-        Exact BSM truncation interval.  Cumulants: c1 = −½σ²T, c2 = σ²T, c4 = 0.
+        Exact BSM truncation interval. Cumulants: c1 = -0.5*sigma^2*T, c2 = sigma^2*T, c4 = 0.
         """
         s2t  = self.sigma**2 * texp
         c1   = -0.5 * s2t

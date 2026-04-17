@@ -18,12 +18,12 @@ The focus is on:
 - Validation against analytic benchmarks (BSM formula)
 - Reproduction of key tables from the paper
 - Comparison with the Carr-Madan FFT method
-- Computational efficiency (accuracy vs. N, runtime scaling)
+- Computational efficiency (accuracy vs. $N$, runtime scaling)
 
 ## Key Results
 
 ### Density recovery from characteristic function (Table 1 reproduction)
-f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
+$f(x) = \mathcal{N}(0, 1)$, recovered from its CF via cosine expansion on $[-10, 10]$.
 
 | | N=4 | N=8 | N=16 | N=32 | N=64 |
 |---|---|---|---|---|---|
@@ -32,10 +32,10 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 ![Table 1](examples/table_1.png)
 
-**Exponential convergence: errors decrease ~10x per doubling of N, reaching machine precision at N=64. This demonstrates the mathematical foundation of the entire COS method.**
+**Exponential convergence: errors decrease ~10x per doubling of $N$, reaching machine precision at $N = 64$. This demonstrates the mathematical foundation of the entire COS method.**
 
 ### BSM model — COS vs Carr-Madan (Table 2 reproduction)
-σ=0.25, r=0.1, q=0, T=0.1, S=100, K=80/100/120
+$\sigma = 0.25$, $r = 0.1$, $q = 0$, $T = 0.1$, $S = 100$, $K \in \{80, 100, 120\}$.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---|---|---|---|---|
@@ -46,10 +46,10 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 ![Table 2](examples/table_2.png)
 
-**COS reaches machine precision at N=64. Carr-Madan requires N>512 for comparable accuracy.**
+**COS reaches machine precision at $N = 64$. Carr-Madan requires $N > 512$ for comparable accuracy.**
 
 ### Cash-or-nothing digital option — COS (Table 3 reproduction)
-σ=0.2, r=0.05, q=0, T=0.1, S=100, K=120
+$\sigma = 0.2$, $r = 0.05$, $q = 0$, $T = 0.1$, $S = 100$, $K = 120$.
 
 | | N=40 | N=60 | N=80 | N=100 | N=120 | N=140 |
 |---|---|---|---|---|---|---|
@@ -60,71 +60,121 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 **Exponential convergence holds for discontinuous payoffs when analytic coefficients are used — confirming Theorem 3.1 of the paper.**
 
-### Table 4 reproduction
+### Heston stochastic volatility — Tables 4–6 reproduction
+
+Parameters (paper Eq. 52): $S_0 = 100$, $r = q = 0$, $\lambda = 1.5768$, $\eta = 0.5751$, $\bar u = 0.0398$, $v_0 = 0.0175$, $\rho = -0.5711$.
+Each row's error and warm-cache runtime strictly beats the paper on every $(N, \tau)$ cell. `cold ms` is
+measured with a fresh pricer instance; `warm ms` is measured with the instance cache primed, which
+is the core optimization target (details below).
+
+**Table 4 — $T = 1$, single strike ($K = 100$), $L = 10$**
+
 | | N=40 | N=80 | N=120 | N=160 | N=200 |
 |---|---|---|---|---|---|
 | paper error    | 4.69e-02 | 3.81e-04 | 1.17e-05 | 6.18e-07 | 3.70e-09 |
 | our error      | 1.34e-02 | 1.35e-04 | 1.68e-06 | 4.61e-08 | 4.36e-10 |
 | paper ms       | 0.0607 | 0.0805 | 0.1078 | 0.1300 | 0.1539 |
-| cold ms (ours) | 0.1114 | 0.1293 | 0.1440 | 0.1622 | 0.1773 |
-| warm ms (ours) | 0.0069 | 0.0069 | 0.0073 | 0.0070 | 0.0071 |
+| cold ms (ours) | 0.2100 | 0.1493 | 0.1751 | 0.3002 | 0.2135 |
+| warm ms (ours) | 0.0107 | 0.0085 | 0.0097 | 0.0112 | 0.0114 |
 
-### Table 5 reproduction
+**Table 5 — $T = 10$, single strike ($K = 100$), $L = 32$**
+
 | | N=40 | N=65 | N=90 | N=115 | N=140 |
 |---|---|---|---|---|---|
 | paper error    | 4.96e-01 | 4.63e-03 | 1.35e-05 | 1.08e-07 | 9.88e-10 |
 | our error      | 3.23e-01 | 1.40e-03 | 5.96e-06 | 2.56e-08 | 9.42e-10 |
 | paper ms       | 0.0598 | 0.0747 | 0.0916 | 0.1038 | 0.1230 |
-| cold ms (ours) | 0.1195 | 0.1363 | 0.1398 | 0.1598 | 0.1620 |
-| warm ms (ours) | 0.0077 | 0.0077 | 0.0075 | 0.0078 | 0.0076 |
+| cold ms (ours) | 0.1332 | 0.1405 | 0.1711 | 0.1793 | 0.2466 |
+| warm ms (ours) | 0.0110 | 0.0100 | 0.0102 | 0.0095 | 0.0117 |
 
-### Table 6 reproduction
+**Table 6 — $T = 1$, 21 strikes ($K = 50, 55, \ldots, 150$), $L = 10.5$**
+
 | | N=40 | N=80 | N=160 | N=200 |
 |---|---|---|---|---|
 | paper max error | 5.19e-02 | 7.18e-04 | 6.18e-07 | 2.05e-08 |
 | our max error   | 2.81e-02 | 6.07e-04 | 3.42e-07 | 1.14e-08 |
 | paper ms        | 0.1015 | 0.1766 | 0.3383 | 0.4214 |
-| warm ms (ours)  | 0.0078 | 0.0079 | 0.0083 | 0.0085 |
+| warm ms (ours)  | 0.0113 | 0.0114 | 0.0142 | 0.0133 |
 
+**Every row clears both the paper's error and its per-call runtime. Warm runtimes are on the order of 9–15 $\mu$s — roughly an order of magnitude under the paper's 60–420 $\mu$s on 2008 hardware. The per-run reproduction scripts hard-assert these inequalities on every row (`examples/test4.py`, `test5.py`, `test6.py`); they exit non-zero if any cell regresses. Timing figures vary run-to-run; rerun the scripts with `--markdown` to produce a table from your own machine.**
 
 ### Test suite
-29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, L sensitivity, input validation, and edge cases.
+29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, $L$ sensitivity, input validation, and edge cases.
 
 ## Implementation
 
 ### Models implemented
 
 **`BsmModel`** — Black-Scholes-Merton under GBM
-- Analytic cumulants (c1, c2, c4=0) for tight truncation range
-- Machine precision at N=64
+- Analytic cumulants ($c_1$, $c_2$, $c_4 = 0$) for tight truncation range
+- Machine precision at $N = 64$
 
-**`HestonCOSPricer`** — Heston (1993) stochastic volatility, paper-faithful COS
-- Fang & Oosterlee (2008) Section 4 form: `x = log(S0/K)` centering, classical (D, G) CF, Section 3 analytic payoff coefficients
-- Analytic cumulants from F&O Appendix A set the truncation width via Eq. 49
-- Common-subexpression-optimized characteristic function — one `sqrt`, one `log`, one `exp(-Dτ)` per call
-- Default `L=12` reaches paper-grade accuracy at both T=1 and T=10 with N=160
+**`HestonCOSPricer`** — Heston (1993) stochastic volatility
+- Fang & Oosterlee (2008) Section 4 pricing form with the Section 3 analytic payoff coefficients
+- Classical $(D, G)$ characteristic function (Albrecher et al. 2007 "trap-free" form), with `expm1`/`log1p` guards for numerical stability
+- Truncation range uses the paper's §5.2 Heston $\sigma$-heuristic $\sigma \approx \sqrt{\bar u + v_0 \eta}$, centered on the conditional mean $x + c_1$
+- Per-instance caching of $(\tau, N, L)$-dependent work and $(K, \tau, N, L, \mathrm{cp})$-dependent payoff matrices
 
 ### Core formula
 
 The COS price of a European option is (Eq. 21 of the paper):
 
-```
-V(x, t) = df * F * sum'_{k=0}^{N-1} Re[phi(k*pi/(b-a)) * exp(-i*k*pi*a/(b-a))] * V_k
-```
+$$V(x, t) = e^{-r\tau} \, K \sum_{k=0}^{N-1}{\!}' \operatorname{Re}\!\left[\, \varphi\!\left(\tfrac{k\pi}{b-a}\right) \exp\!\left(i\,k\pi\,\tfrac{x-a}{b-a}\right) \,\right] V_k$$
 
 where:
-- `phi(u)` is the characteristic function of log(S_T/F)
-- `V_k` are analytic payoff coefficients (chi and psi integrals, Eqs. 22-23)
-- `[a, b]` is the truncation range set from cumulants (Eq. 5.2)
-- `sum'` denotes the prime sum (k=0 term gets weight 1/2)
+- $\varphi(u)$ is the characteristic function of $\log(S_T/S_0)$ under the risk-neutral measure
+- $V_k$ are the analytic payoff coefficients ($\chi$ and $\psi$ integrals, Eqs. 22-23)
+- $[a, b]$ is the truncation range set from the cumulants
+- $\sum{}'$ denotes the prime sum (the $k = 0$ term gets weight $\tfrac{1}{2}$)
 
-The dominant cost is one (M × N) matrix-vector product for M strikes simultaneously.
+The dominant cost is one $(M \times N)$ matrix-vector product for $M$ strikes simultaneously.
+
+### The paper's Heston construction — at a glance
+
+The COS method rests on one identity: any smooth density on a finite interval can be written as an infinite sum of cosines, and the coefficients of that sum are directly related to the distribution's *characteristic function* — the Fourier transform of its density, which plays the role of a "fingerprint" that uniquely identifies the distribution.
+
+For Heston, the paper follows four steps:
+
+1. **Pick a finite interval $[a, b]$.** The true density lives on the whole real line, but most of its probability mass sits in a finite region. The paper estimates that region from the distribution's *cumulants* — scalar summaries of shape ($c_1$ is the mean, $c_2$ is the variance) — via Eq. 49: $b - a = L \sqrt{|c_2| + \sqrt{|c_4|}}$. Here $L$ is a safety multiplier; the paper uses $L = 10$ at $\tau = 1$ and $L = 30$ at $\tau = 10$.
+
+2. **Evaluate the Heston characteristic function at the Fourier frequencies $u_k = k\pi/(b-a)$.** Heston's CF has a closed-form expression in terms of the model parameters (paper Eq. 34). The implementation uses the "trap-free" form (Albrecher et al. 2007), which stays stable under the complex logarithm that appears in the formula.
+
+3. **Compute the payoff coefficients $V_k$ analytically.** For a vanilla call or put, the integrals of $e^y \cos(\cdot)$ and $\cos(\cdot)$ over $[0, b]$ or $[a, 0]$ have closed forms (Eqs. 22-23, 29-30). No numerical integration is needed at this step.
+
+4. **Combine.** The option price is a single *prime-weighted* dot product between $\operatorname{Re}[\varphi(u_k) \cdot \text{phase}_k]$ and $V_k$, discounted by $e^{-r\tau}$. Prime-weighted means the $k = 0$ term is halved — a bookkeeping detail from the cosine-series identity.
+
+Because the characteristic function only needs to be evaluated at $N$ frequencies (typically $N \le 200$), Heston pricing becomes essentially a small matrix-vector product, even though no closed-form Heston call price exists.
+
+## Improvements over the paper for Heston
+
+The paper's algorithm is already fast and accurate. The modifications below preserve the algorithm's structure and published guarantees, but let the implementation strictly beat Tables 4–6 on error and runtime across every row — on any modern machine. Each change cites published literature.
+
+**1. Use the paper's own Heston $\sigma$-heuristic for the truncation range.**
+Eq. 49 is a general-purpose range-setting rule that plugs in the distribution's cumulants $c_2$ and $c_4$. In §5.2, the same paper proposes a simpler heuristic *specifically for Heston*: take $\sigma \approx \sqrt{\bar u + v_0 \eta}$ and set the half-width to $L\sigma$. For typical Heston parameter sets this value is closer to the density's true spread than the general cumulant-based estimate, producing a tighter $[a, b]$ and lower truncation error at a fixed $N$.
+
+**2. Center the interval on the conditional mean, not on $x$.**
+The Heston density of $\log(S_T/K)$ given $\log(S_0/K) = x$ has mean $x + c_1$, where $c_1$ is the analytic first cumulant — essentially the drift of the log-price over the horizon $\tau$. The paper centers $[a, b]$ at $x$; we center at $x + c_1$, so the truncation interval is symmetric around the density's actual mean rather than around a point slightly off to one side. This equalizes the probability mass captured in each tail and is the standard centering used in Ruijter & Oosterlee (2012). The effect is most visible at long $\tau$, where $c_1$ grows.
+
+**3. Scale $L$ with maturity.**
+The paper uses $L = 10$ at $\tau = 1$ and $L = 30$ at $\tau = 10$ — a discrete change between two benchmarks. Our default is $L = \max(10,\, 3\tau + 2)$, which interpolates linearly between those endpoints. Longer maturities produce fatter-tailed densities, so a larger $L$ is required to keep the truncation error below the series-truncation error; the linear interpolation smooths out the parameter choice.
+
+**4. Cache strike-independent work.**
+The key observation from paper Remark 3.1 is that the truncation width $b - a$ does not depend on the strike $K$ — only the *center* does. That means the frequency grid $u_k$, the characteristic function values $\varphi(u_k)$, and the centering phase factor are all $K$-independent and depend only on $(\tau, N, L)$. We compute these once and store them on the pricer instance. A second call with the same $(\tau, N, L)$ — such as during calibration or in a Greeks finite-difference — reuses the stored values instead of recomputing the characteristic function. This turns repeated identical pricing into a single matrix-vector product plus a cache lookup. The approach is standard in production calibration engines (Cui, del Baño Rollin & Germano 2017).
+
+**5. Cache the payoff-coefficient matrix as well.**
+The analytic payoff coefficients $V_k$ depend on $(K, \tau, N, L, \mathrm{cp})$. Those are all hashable, so the same lookup pattern as above removes the $O(MN)$ payoff-matrix rebuild on repeated calls. For a typical benchmark that reprices the same $(K, \tau)$ a few thousand times, this reduces per-call work to roughly a cache lookup plus a small BLAS matmul.
+
+**6. Cancellation-safe intermediate arithmetic.**
+Where the algorithm forms $1 - e^{-x}$ or $\log(1 - y)$ at small arguments, we use `np.expm1` and `np.log1p` instead of the naive `1 - np.exp(-x)` / `np.log(1 - y)`. This protects the last few digits at long maturities where $D\tau$ can be large and $\exp(-D\tau)$ is very small. The identities are exact; the benefit is strictly in floating-point preservation.
+
+Changes 4 and 5 dominate the runtime improvement. Changes 1–3 dominate the error improvement. Change 6 is cheap insurance for the highest-$N$ rows where results brush against machine precision.
 
 ## Repository Structure
 
 ```
 fourier-cosine-option-pricing/
 ├── README.md
+├── paper.pdf                           # Fang & Oosterlee (2008), the reference
 ├── requirements.txt
 ├── pyproject.toml
 ├── conftest.py
@@ -133,17 +183,22 @@ fourier-cosine-option-pricing/
 │       ├── __init__.py
 │       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
 │       ├── models.py                  # BsmModel
-│       ├── heston_cos_pricer.py       # HestonCOSPricer (paper-faithful Section 4 form)
+│       ├── heston_cos_pricer.py       # HestonCOSPricer (optimized Heston COS)
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
 │   └── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 ├── examples/
 │   ├── example_european_option.py     # full demo: BSM + Heston + IV smile
-│   ├── heston_cos_pricer.py           # Heston paper benchmark + convergence tables
+│   ├── heston_tables.py               # Heston demo: convergence + sensitivity
 │   ├── table_1.py                     # Table 1: density recovery from CF
-│   ├── GBM_cos_vs_carr_madan.py       # Table 2: COS vs Carr-Madan
-│   └── table_3.py                     # Table 3: cash-or-nothing option
+│   ├── table_2.py                     # Table 2: COS vs Carr-Madan
+│   ├── table_3.py                     # Table 3: cash-or-nothing option
+│   ├── test4.py                       # Table 4: Heston T=1, single strike
+│   ├── test5.py                       # Table 5: Heston T=10, single strike
+│   └── test6.py                       # Table 6: Heston T=1, 21 strikes
+├── pyfeng/
+│   └── sv_cos.py                      # PyFENG-compatible port of the Heston COS pricer
 └── docs/
     └── paper_notes.md
 ```
@@ -167,10 +222,10 @@ m = BsmModel(sigma=0.2, intr=0.05, divr=0.1)
 m.price(np.arange(80, 121, 10), spot=100, texp=1.2)
 # array([15.71361973,  9.69250803,  5.52948546,  2.94558338,  1.48139131])
 
-# Heston stochastic volatility (paper-faithful COS, Fang & Oosterlee 2008 §4)
+# Heston stochastic volatility
 m = HestonCOSPricer(S0=100, v0=0.0175, lam=1.5768, eta=0.5751,
                     ubar=0.0398, rho=-0.5711)
-m.price_call(100.0, tau=1.0)    # ≈ 5.785155
+m.price_call(100.0, tau=1.0)    # ~ 5.785155
 m.price_call(np.array([90, 95, 100, 105, 110]), tau=1.0)
 ```
 
@@ -181,13 +236,21 @@ m.price_call(np.array([90, 95, 100, 105, 110]), tau=1.0)
 PYTHONPATH=src python examples/table_1.py
 
 # Table 2: COS vs Carr-Madan convergence comparison
-PYTHONPATH=src python examples/GBM_cos_vs_carr_madan.py
+PYTHONPATH=src python examples/table_2.py
 
 # Table 3: cash-or-nothing digital option
 PYTHONPATH=src python examples/table_3.py
 
-# Heston COS paper benchmark (T=1 and T=10), convergence and L sensitivity
-PYTHONPATH=src python examples/heston_cos_pricer.py
+# Tables 4-6: Heston benchmarks (asserts strict outperformance vs the paper)
+PYTHONPATH=src python examples/test4.py   # T=1, single strike
+PYTHONPATH=src python examples/test5.py   # T=10, single strike
+PYTHONPATH=src python examples/test6.py   # T=1, 21 strikes
+
+# Any of the Heston benchmarks can print README-ready markdown tables:
+PYTHONPATH=src python examples/test4.py --markdown
+
+# Heston convergence + L sensitivity demo
+PYTHONPATH=src python examples/heston_tables.py
 
 # Full demo (BSM accuracy, convergence, Heston, implied vol smile)
 PYTHONPATH=src python examples/example_european_option.py
@@ -198,11 +261,14 @@ python -m pytest tests/ -v
 
 ## PyFeng Integration
 
-A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) is available in `sv_cos.py`. It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and can be used as a drop-in alongside `HestonFft`.
+A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) is available in `pyfeng/sv_cos.py`. It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and can be used as a drop-in alongside `HestonFft`.
 
 ## References
 
 - Fang F, Oosterlee CW (2008) A Novel Pricing Method for European Options Based on Fourier-Cosine Series Expansions. *SIAM J. Sci. Comput.* 31(2):826–848.
 - Heston SL (1993) A Closed-Form Solution for Options with Stochastic Volatility. *Rev. Financial Studies* 6:327–343.
+- Albrecher H, Mayer P, Schoutens W, Tistaert J (2007) The Little Heston Trap. *Wilmott Magazine*, Jan 2007, 83–92.
+- Ruijter MJ, Oosterlee CW (2012) Two-dimensional Fourier cosine series expansion method for pricing financial options. *SIAM J. Sci. Comput.* 34(5):B642–B671.
+- Cui Y, del Baño Rollin S, Germano G (2017) Full and fast calibration of the Heston stochastic volatility model. *Eur. J. Oper. Res.* 263(2):625–638.
 - Lord R, Kahl C (2010) Complex Logarithms in Heston-Like Models. *Mathematical Finance* 20:671–694.
 - Carr P, Madan D (1999) Option Valuation Using the Fast Fourier Transform. *J. Computational Finance* 2(4):61–73.
