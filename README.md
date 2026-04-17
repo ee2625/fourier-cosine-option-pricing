@@ -60,6 +60,33 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 
 **Exponential convergence holds for discontinuous payoffs when analytic coefficients are used — confirming Theorem 3.1 of the paper.**
 
+### Table 4 reproduction
+| | N=40 | N=80 | N=120 | N=160 | N=200 |
+|---|---|---|---|---|---|
+| paper error    | 4.69e-02 | 3.81e-04 | 1.17e-05 | 6.18e-07 | 3.70e-09 |
+| our error      | 1.34e-02 | 1.35e-04 | 1.68e-06 | 4.61e-08 | 4.36e-10 |
+| paper ms       | 0.0607 | 0.0805 | 0.1078 | 0.1300 | 0.1539 |
+| cold ms (ours) | 0.1114 | 0.1293 | 0.1440 | 0.1622 | 0.1773 |
+| warm ms (ours) | 0.0069 | 0.0069 | 0.0073 | 0.0070 | 0.0071 |
+
+### Table 5 reproduction
+| | N=40 | N=65 | N=90 | N=115 | N=140 |
+|---|---|---|---|---|---|
+| paper error    | 4.96e-01 | 4.63e-03 | 1.35e-05 | 1.08e-07 | 9.88e-10 |
+| our error      | 3.23e-01 | 1.40e-03 | 5.96e-06 | 2.56e-08 | 9.42e-10 |
+| paper ms       | 0.0598 | 0.0747 | 0.0916 | 0.1038 | 0.1230 |
+| cold ms (ours) | 0.1195 | 0.1363 | 0.1398 | 0.1598 | 0.1620 |
+| warm ms (ours) | 0.0077 | 0.0077 | 0.0075 | 0.0078 | 0.0076 |
+
+### Table 6 reproduction
+| | N=40 | N=80 | N=160 | N=200 |
+|---|---|---|---|---|
+| paper max error | 5.19e-02 | 7.18e-04 | 6.18e-07 | 2.05e-08 |
+| our max error   | 2.81e-02 | 6.07e-04 | 3.42e-07 | 1.14e-08 |
+| paper ms        | 0.1015 | 0.1766 | 0.3383 | 0.4214 |
+| warm ms (ours)  | 0.0078 | 0.0079 | 0.0083 | 0.0085 |
+
+
 ### Test suite
 29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, L sensitivity, input validation, and edge cases.
 
