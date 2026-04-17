@@ -36,7 +36,7 @@ SEP = "=" * 62
 
 print(SEP)
 print("1. BsmModel (COS) vs analytic BSM")
-print("   σ=0.20, r=0.05, q=0.10, T=1.2, spot=100")
+print("   sigma=0.20, r=0.05, q=0.10, T=1.2, spot=100")
 print(SEP)
 
 m_bsm = BsmModel(sigma=0.2, intr=0.05, divr=0.1)
@@ -59,7 +59,7 @@ print(f"\n  Max absolute error: {np.max(np.abs(cos_v - ana_v)):.2e}")
 print()
 print(SEP)
 print("2. BsmModel – convergence as N increases")
-print("   ATM call, σ=0.25, T=1.0, spot=K=100")
+print("   ATM call, sigma=0.25, T=1.0, spot=K=100")
 print(SEP)
 
 m_conv = BsmModel(sigma=0.25)
@@ -104,7 +104,7 @@ benchmark_runtime(
 print()
 print(SEP)
 print("4. HestonCOSPricer – standard calibrated parameters")
-print("   v0=0.0398, λ=1.5768, ū=0.0398, η=0.5751, ρ=−0.5711")
+print("   v0=0.0398, lam=1.5768, ubar=0.0398, eta=0.5751, rho=-0.5711")
 print(SEP)
 
 spot_h    = 100.0
@@ -114,7 +114,7 @@ heston_params = dict(
 )
 m_heston = HestonCOSPricer(S0=spot_h, **heston_params)
 feller   = 2.0 * heston_params["lam"] * heston_params["ubar"] / heston_params["eta"]**2
-print(f"  Feller ratio 2λū/η²  = {feller:.4f}")
+print(f"  Feller ratio 2*lam*ubar/eta^2  = {feller:.4f}")
 
 strikes_h = np.array([80, 90, 100, 110, 120], dtype=float)
 

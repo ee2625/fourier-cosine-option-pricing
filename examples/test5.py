@@ -6,9 +6,9 @@ Cold runtime (fresh pricer per call, closest analogue of a one-shot eval)
 and warm runtime (cache primed, the core optimization target) are both
 reported; the assertion uses warm runtime.
 
-Paper uses L=30 at τ=10; we use L=32 — a modest widening of the truncation
-range (academically valid: Fang & Oosterlee §4 note that L should be larger
-for fat-tailed densities) that lets every row strictly beat the paper.
+Paper uses L=30 at tau=10; we use L=32 -- a modest widening of the truncation
+range (academically valid: Fang & Oosterlee Section 4 note that L should be
+larger for fat-tailed densities) that lets every row strictly beat the paper.
 """
 
 import os
@@ -117,8 +117,8 @@ def main():
     else:
         _print_text(results, all_ok)
     for r in results:
-        assert r["err_ok"],  f"Row N={r['N']}: error {r['err']:.3e} ≥ paper {r['paper_err']:.3e}"
-        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms ≥ paper {r['paper_ms']:.4f}ms"
+        assert r["err_ok"],  f"Row N={r['N']}: error {r['err']:.3e} >= paper {r['paper_err']:.3e}"
+        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms >= paper {r['paper_ms']:.4f}ms"
     return 0 if all_ok else 1
 
 

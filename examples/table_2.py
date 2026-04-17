@@ -118,7 +118,7 @@ def cm_time_ms(N):
 print("=" * 72)
 print("TABLE 2 REPRODUCTION  —  Fang & Oosterlee (2008)")
 print("Error convergence and CPU time: COS vs Carr-Madan, European options, GBM")
-print(f"  S={S}, r={r}, q={q}, σ={sigma}, T={T}, L={L}")
+print(f"  S={S}, r={r}, q={q}, sigma={sigma}, T={T}, L={L}")
 print(f"  Strikes K = {strikes.tolist()}")
 print(f"  Reference (analytic BSM): {np.round(ref, 4).tolist()}")
 print("=" * 72)

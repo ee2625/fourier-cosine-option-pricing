@@ -106,7 +106,7 @@ print("TABLE 3 REPRODUCTION  —  Fang & Oosterlee (2008)")
 print("Cash-or-nothing call, COS method under GBM")
 print(f"  S={S}, K={K}, r={r}, q={q}, T={T}, sigma={sigma}, L={L}")
 print(f"  Analytic reference: df*N(d2) = {ref:.12f}")
-print(f"  (Paper states reference ≈ 0.27330649649 — likely OCR artifact)")
+print(f"  (Paper states reference ~ 0.27330649649 -- likely OCR artifact)")
 print("=" * 65)
 
 print(f"\n{'N':>6}  {'COS price':>18}  {'Error':>14}  {'msec':>10}")

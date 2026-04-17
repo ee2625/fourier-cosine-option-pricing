@@ -9,10 +9,10 @@ shared across all strikes; the payoff matrix is rebuilt per strike vector
 Reference prices are computed once on module import via the Lewis (2001)
 Fourier formula integrated to scipy-quad machine precision (~10⁻¹⁴).
 
-Paper uses L=10 at τ=1; we use L=10.5 — a small widening that keeps the
-deep-ITM call (K=50, payoff ∝ eʸ) well inside the truncation tail. Fang &
-Oosterlee §4 note L should be "somewhat larger" when the payoff magnifies
-one of the density tails.
+Paper uses L=10 at tau=1; we use L=10.5 -- a small widening that keeps the
+deep-ITM call (K=50, payoff proportional to exp(y)) well inside the
+truncation tail. Fang & Oosterlee Section 4 note L should be "somewhat
+larger" when the payoff magnifies one of the density tails.
 """
 
 import os
@@ -62,7 +62,8 @@ def _cf(u, T):
 def reference_prices():
     """High-precision call prices via the Lewis (2001) inversion formula.
 
-    Call(K) = S0 − (√(S0·K)·e^{−rT}/π)·∫₀^∞ Re[φ(u − i/2)·e^{iu·log(S0/K)}] / (u² + 1/4) du
+    Call(K) = S0 - (sqrt(S0*K) * exp(-r*T) / pi) * integral from 0 to inf of
+              Re[phi(u - i/2) * exp(i*u*log(S0/K))] / (u^2 + 1/4) du
     """
     S0_ = PARAMS["S0"]; r = PARAMS["r"]
     refs = np.empty(STRIKES.size)
@@ -147,8 +148,8 @@ def main():
     else:
         _print_text(results, all_ok)
     for r in results:
-        assert r["err_ok"],  f"Row N={r['N']}: max-err {r['err']:.3e} ≥ paper {r['paper_err']:.3e}"
-        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms ≥ paper {r['paper_ms']:.4f}ms"
+        assert r["err_ok"],  f"Row N={r['N']}: max-err {r['err']:.3e} >= paper {r['paper_err']:.3e}"
+        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms >= paper {r['paper_ms']:.4f}ms"
     return 0 if all_ok else 1
 
 
