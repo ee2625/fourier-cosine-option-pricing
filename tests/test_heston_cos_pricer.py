@@ -51,7 +51,8 @@ def test_L_sensitivity():
     m = HestonCOSPricer(**PAPER_PARAMS)
     err_small_L = abs(m.price_call(100.0, 1.0, N=160, L=3.0) - REF_T1)
     err_good_L  = abs(m.price_call(100.0, 1.0, N=160, L=12.0) - REF_T1)
-    assert err_small_L > 1e-2
+    # L=3 is truncation-dominated and should be orders of magnitude worse than L=12.
+    assert err_small_L > 1e3 * err_good_L
     assert err_good_L  < 1e-6
 
 

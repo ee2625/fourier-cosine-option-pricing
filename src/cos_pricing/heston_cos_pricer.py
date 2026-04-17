@@ -1,13 +1,18 @@
 """
 Heston European option pricing via the Fourier-Cosine (COS) method.
 
-Faithful to Fang & Oosterlee (2008), Section 4: uses x = log(S0/K) centering,
-the classical characteristic function in (D, G) form, and the Section 3
-payoff coefficients built from analytic chi_k, psi_k integrals.
+Faithful to Fang & Oosterlee (2008) Section 4/5.2, with three numerical
+improvements that preserve the COS algorithm and its analytical coefficients:
 
-The classical CF can become branch-unstable at very long maturities; the
-Lord-Kahl (2010) rotation is the robust alternative. The paper's T=10
-benchmark passes here with L=30 as in the paper.
+1. Truncation range uses the paper's Heston σ ≈ √(ū + u0·η) (§5.2) with
+   [a,b] centered on x + c1, the conditional mean of log(S_T/K). Centering
+   on the mean (rather than on x alone) equalizes the tails captured on
+   each side (Ruijter & Oosterlee 2012, §2.3).
+2. Strike-independent work (cumulants, frequency grid, CF, centering
+   phase, prime-sum halving) is memoized per (τ, N, L). Standard practice
+   in calibration engines (Cui–del Baño–Germano 2017).
+3. Default L scales with τ (max(10, 3τ+2)) so long maturities keep
+   the classical CF inside its numerically-stable band.
 
 Reference:
     Fang F, Oosterlee CW (2008) A Novel Pricing Method for European Options
@@ -19,10 +24,16 @@ import numpy as np
 
 
 class HestonCOSPricer:
-    """Heston European call/put pricer using the Fang-Oosterlee COS method."""
+    """Heston European call/put pricer via the Fang-Oosterlee COS method.
+
+    Strike-independent work is cached per (τ, N, L) on the instance;
+    ``clear_cache()`` drops it.
+    """
+
+    _CACHE_CAP = 64
 
     def __init__(self, S0, v0, lam, eta, ubar, rho, r=0.0, q=0.0):
-        """Store Heston parameters and validate ranges (ρ in (-1,1); v0, λ, η, ū > 0)."""
+        """Store parameters, validate ranges (ρ∈(-1,1); v0, λ, η, ū > 0), cache scalars."""
         if v0 <= 0.0:
             raise ValueError(f"v0 must be > 0, got {v0}")
         if lam <= 0.0:
@@ -43,61 +54,73 @@ class HestonCOSPricer:
         self.r    = float(r)
         self.q    = float(q)
 
-        # Cached subexpressions used every CF / cumulant call.
+        # Scalars reused in every CF / cumulant call.
         self._eta2      = self.eta * self.eta
         self._inv_eta2  = 1.0 / self._eta2
         self._rho_eta   = self.rho * self.eta
         self._lam_ubar  = self.lam * self.ubar
         self._drift_rq  = self.r - self.q
+        # Paper §5.2 heuristic std-dev for Heston, used in truncation range.
+        self._sigma_h   = float(np.sqrt(self.ubar + self.v0 * self.eta))
+
+        # (τ, N, L) → (width, c1, phi_re). FIFO-evicted at _CACHE_CAP entries.
+        self._cf_cache = {}
+        # (K_bytes, τ, N, L, cp) → U matrix. Repeated identical strike vectors
+        # reuse the built payoff coefficients; main win for calibration loops.
+        self._u_cache = {}
+
+    def clear_cache(self):
+        """Drop all cached frequency/CF/payoff intermediates."""
+        self._cf_cache.clear()
+        self._u_cache.clear()
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Characteristic function (classical Fang-Oosterlee form)
+    # Characteristic function (classical Fang-Oosterlee / trap-free form)
     # ─────────────────────────────────────────────────────────────────────────
 
     def char_func(self, u, tau):
-        """Heston CF of log(S_T/S0) under the risk-neutral measure, evaluated at real ω=u."""
+        """Heston CF of log(S_T/S0) at real ω=u, maturity τ."""
         u = np.asarray(u)
 
         iu          = 1j * u
         beta        = self.lam - self._rho_eta * iu                 # λ − i ρ η u
-        disc        = beta * beta + self._eta2 * (u * u + iu)       # (u² + iu) ≡ u(u+i)
+        disc        = beta * beta + self._eta2 * (u * u + iu)       # u² + iu
         D           = np.sqrt(disc)                                  # principal branch, Re(D) ≥ 0
-        beta_minus  = beta - D                                       # reused three times
+        beta_minus  = beta - D
         G           = beta_minus / (beta + D)
 
         Dt          = D * tau
-        exp_mDt     = np.exp(-Dt)                                    # single exp(-Dτ) call
+        exp_mDt     = np.exp(-Dt)
         one_m_Gexp  = 1.0 - G * exp_mDt
         one_m_G     = 1.0 - G
-        one_m_exp   = -np.expm1(-Dt)                                 # = 1 − exp(-Dτ), stable for small Dτ
+        one_m_exp   = -np.expm1(-Dt)                                 # 1 − exp(-Dτ), cancellation-safe
 
         term_drift  = iu * self._drift_rq * tau
         term_v0     = (self.v0 * self._inv_eta2) * (one_m_exp / one_m_Gexp) * beta_minus
-        log_ratio   = np.log(one_m_Gexp / one_m_G)                   # principal branch
+        log_ratio   = np.log(one_m_Gexp / one_m_G)
         term_ubar   = (self._lam_ubar * self._inv_eta2) * (beta_minus * tau - 2.0 * log_ratio)
 
         return np.exp(term_drift + term_v0 + term_ubar)
 
     # ─────────────────────────────────────────────────────────────────────────
-    # Truncation interval (paper Eq. 49, recentered on x = log(S0/K))
+    # Cumulants and truncation interval
     # ─────────────────────────────────────────────────────────────────────────
 
     def _cumulants(self, tau):
-        """Analytic c1, c2 of log(S_T/S0) under Heston (F&O Appendix A); c4 set to 0 per §5."""
+        """Analytic c1, c2 of log(S_T/S0) under Heston; c4 set to 0 per paper §5."""
         lam, eta, ubar, v0, rho = self.lam, self.eta, self.ubar, self.v0, self.rho
         eta2 = self._eta2
 
         eT        = np.exp(-lam * tau)
-        e2T       = eT * eT                                           # avoid second exp
-        one_m_eT  = -np.expm1(-lam * tau)                             # cancellation-safe
+        e2T       = eT * eT
+        one_m_eT  = -np.expm1(-lam * tau)
         v0_m_ubar = v0 - ubar
 
         c1 = self._drift_rq * tau - 0.5 * (ubar * tau + v0_m_ubar * one_m_eT / lam)
 
-        lam2 = lam * lam
-        lam3 = lam2 * lam
+        lam2, lam3 = lam * lam, lam * lam * lam
         rho_eta = self._rho_eta
-        # F&O Appendix A.2 (c2) — lifted from models.py:210-216, kap→lam, λ̄→ubar.
+        # F&O Appendix A.2.
         c2 = (
             eta * tau * lam * eT * v0_m_ubar * (8.0 * lam * rho - 4.0 * eta)
           + lam * rho_eta * one_m_eT * (16.0 * ubar - 8.0 * v0)
@@ -110,23 +133,65 @@ class HestonCOSPricer:
 
     @staticmethod
     def _default_L(tau):
+        """Per-τ half-width multiplier. Paper uses L=10 at τ=1 and L=30 at τ=10;
+        our max(10, 3τ+2) lands at 10 and 32 respectively and interpolates linearly.
         """
-        Default truncation-range half-width multiplier L=12 — stable across
-        τ ∈ [0.1, 10] for the classical (D, G) CF. Larger L (paper's L=30 at
-        τ=10) exposes branch-rotation issues in this form; L=12 sidesteps
-        them while staying paper-accurate.
-        """
-        return 12.0
+        return max(10.0, 3.0 * tau + 2.0)
+
+    def _c1(self, tau):
+        """Mean of log(S_T/S0): exact analytic form (F&O Appendix A)."""
+        one_m_eT = -np.expm1(-self.lam * tau)
+        return self._drift_rq * tau - 0.5 * (self.ubar * tau + (self.v0 - self.ubar) * one_m_eT / self.lam)
 
     def truncation_interval(self, K, tau, L=None):
-        """Return (a, b, x, width) with [a,b] symmetric around x=log(S0/K) using F&O Eq. 49."""
+        """Return (a, b, x, width) with [a,b] centered on x+c1 and half-width L·σ.
+
+        Uses the paper's §5.2 Heston heuristic σ = √(ū + u0·η). Width is
+        K-independent; center shifts with x = log(S0/K).
+        """
         if L is None:
             L = self._default_L(tau)
-        _, c2, c4 = self._cumulants(tau)
-        width = 2.0 * L * np.sqrt(abs(c2) + np.sqrt(abs(c4)))
+        half  = L * self._sigma_h
+        width = 2.0 * half
         x     = np.log(self.S0 / np.asarray(K, dtype=float))
-        half  = 0.5 * width
-        return x - half, x + half, x, width
+        center = x + self._c1(tau)
+        return center - half, center + half, x, width
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Cached strike-independent work — (τ, N, L) → (width, cshift, phi_re)
+    # ─────────────────────────────────────────────────────────────────────────
+
+    def _cache_phi_re(self, tau, N, L_value):
+        """Return (width, cshift, phi_re) for (τ, N, L); compute-and-stash on miss.
+
+        ``cshift`` is the center offset c1(τ) so that per-call shifting to
+        strike x costs one scalar subtract (a = x + cshift − half).
+        ``phi_re`` is Re(φ(u_k)·exp(i·u_k·(Lσ − c1))) with k=0 halved, ready
+        for matmul against U_k.
+        """
+        key = (tau, N, L_value)
+        hit = self._cf_cache.get(key)
+        if hit is not None:
+            return hit
+
+        c1    = self._c1(tau)
+        half  = L_value * self._sigma_h
+        width = 2.0 * half
+
+        k   = np.arange(N)
+        u   = k * (np.pi / width)
+        phi = self.char_func(u, tau)                                 # complex (N,)
+        # Phase factor exp(i·u·(x−a)) = exp(i·u·(half − c1)); strike-independent.
+        phase = np.exp(1j * u * (half - c1))
+        phi_shift = phi * phase
+        phi_shift[0] *= 0.5                                          # k=0 prime-sum halving
+        phi_re = phi_shift.real
+
+        if len(self._cf_cache) >= self._CACHE_CAP:
+            self._cf_cache.pop(next(iter(self._cf_cache)))           # FIFO evict
+        out = (width, c1, phi_re)
+        self._cf_cache[key] = out
+        return out
 
     # ─────────────────────────────────────────────────────────────────────────
     # Payoff coefficients (paper Eqs. 22, 23, 29, 30)
@@ -134,7 +199,7 @@ class HestonCOSPricer:
 
     @staticmethod
     def _trig_and_exp(k, u, a, b, c, d):
-        """Shared trig / exp evaluations reused by both chi and psi."""
+        """Shared trig/exp evaluations reused by chi and psi."""
         arg_d = u * (d - a)
         arg_c = u * (c - a)
         return {
@@ -166,9 +231,10 @@ class HestonCOSPricer:
 
     @staticmethod
     def payoff_coefficients(N, a, b, cp):
-        """
-        Return U_k coefficients of shape (M, N) for a call (cp=+1) or put (cp=-1),
-        using the paper's Eqs. 29-30 with c=0 for calls and d=0 for puts.
+        """U_k coefficients of shape (M,N) for a call (cp=+1) or put (cp=-1), per Eqs. 29-30.
+
+        Built with c=0 for calls and d=0 for puts; supports scalar or (M,) endpoints.
+        Requires a ≤ 0 ≤ b (call) or a ≤ 0 (put); strike-in-interval condition.
         """
         a = np.atleast_1d(np.asarray(a, dtype=float))[:, None]       # (M, 1)
         b = np.atleast_1d(np.asarray(b, dtype=float))[:, None]       # (M, 1)
@@ -176,60 +242,64 @@ class HestonCOSPricer:
         ba = b - a                                                    # (M, 1)
         u  = k * np.pi / ba                                           # (M, N)
 
-        two_over_ba = 2.0 / ba                                        # (M, 1)
-        inv_1_u2    = 1.0 / (1.0 + u * u)                             # (M, N)
-        u_safe      = np.where(k == 0, 1.0, u)                        # (M, N)
+        two_over_ba = 2.0 / ba
+        inv_1_u2    = 1.0 / (1.0 + u * u)
+        u_safe      = np.where(k == 0, 1.0, u)
 
         if cp > 0:
             # Call: chi_k(0, b) − psi_k(0, b)
-            arg_upper = u * (b - a)                                   # = k π
+            arg_upper = u * (b - a)                                   # = kπ
             arg_lower = u * (-a)
             cos_u, sin_u = np.cos(arg_upper), np.sin(arg_upper)
             cos_l, sin_l = np.cos(arg_lower), np.sin(arg_lower)
             exp_b = np.exp(b)
-            # chi(0, b): c=0 → exp_c = 1, sin_c/cos_c from arg_lower
             chi = (cos_u * exp_b - cos_l
                    + u * (sin_u * exp_b - sin_l)) * inv_1_u2
             psi = np.where(k == 0, b - 0.0, (sin_u - sin_l) / u_safe)
             return two_over_ba * (chi - psi)
 
         # Put: − chi_k(a, 0) + psi_k(a, 0)
-        arg_upper = u * (-a)                                          # = (0 - a)·u
-        arg_lower = 0.0                                               # (a - a)·u = 0
+        arg_upper = u * (-a)                                          # = (0 − a)·u
         cos_u, sin_u = np.cos(arg_upper), np.sin(arg_upper)
-        # arg_lower = 0 → cos=1, sin=0
         exp_a = np.exp(a)
-        # chi(a, 0): c = a, d = 0 → exp_d = 1
-        chi = (cos_u * 1.0 - 1.0 * exp_a
-               + u * (sin_u * 1.0 - 0.0 * exp_a)) * inv_1_u2
-        psi = np.where(k == 0, 0.0 - a, (sin_u - 0.0) / u_safe)
+        # chi(a, 0): c=a, d=0 → exp_d=1; arg_lower = 0 so cos_l=1, sin_l=0.
+        chi = (cos_u - exp_a + u * sin_u) * inv_1_u2
+        psi = np.where(k == 0, 0.0 - a, sin_u / u_safe)
         return two_over_ba * (-chi + psi)
 
     # ─────────────────────────────────────────────────────────────────────────
     # Pricing
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _cache_U(self, K_arr, tau, N, L_value, cp):
+        """Return (K_arr, U) keyed on (K bytes, τ, N, L, cp); cache-miss rebuilds U."""
+        key = (K_arr.tobytes(), tau, N, L_value, cp)
+        hit = self._u_cache.get(key)
+        if hit is not None:
+            return hit
+        width, c1, _ = self._cache_phi_re(tau, N, L_value)
+        half   = 0.5 * width
+        center = np.log(self.S0 / K_arr) + c1
+        a, b   = center - half, center + half
+        U      = self.payoff_coefficients(N, a, b, cp)                # (M, N)
+        if len(self._u_cache) >= self._CACHE_CAP:
+            self._u_cache.pop(next(iter(self._u_cache)))
+        self._u_cache[key] = U
+        return U
+
     def price(self, K, tau, cp=1, N=160, L=None):
-        """Price a European call (cp=+1) or put (cp=-1) at strike(s) K and maturity τ."""
+        """European price (call cp=+1, put cp=-1) at strike(s) K and maturity τ."""
         if tau <= 0.0:
             raise ValueError(f"tau must be > 0, got {tau}")
         if N < 1:
             raise ValueError(f"N must be >= 1, got {N}")
 
+        L_value = self._default_L(tau) if L is None else float(L)
         scalar_in = np.isscalar(K)
-        K_arr = np.atleast_1d(np.asarray(K, dtype=float))            # (M,)
+        K_arr = np.atleast_1d(np.asarray(K, dtype=float))
 
-        a, b, x, width = self.truncation_interval(K_arr, tau, L=L)   # each (M,) except width
-        # width is K-independent → u_k, phi, and phase shift are K-independent too.
-        k        = np.arange(N)
-        u        = k * np.pi / width                                  # (N,)
-        phi      = self.char_func(u, tau)                             # (N,) complex
-        phase    = np.exp(1j * u * (0.5 * width))                     # (N,) complex
-        phi_shift = phi * phase
-        phi_shift[0] *= 0.5                                           # prime-sum (k=0 halved)
-        phi_re   = phi_shift.real                                     # (N,) real
-
-        U = self.payoff_coefficients(N, a, b, cp)                     # (M, N)
+        _, _, phi_re = self._cache_phi_re(tau, N, L_value)
+        U = self._cache_U(K_arr, tau, N, L_value, cp)                 # (M, N)
         df = np.exp(-self.r * tau)
         price_arr = K_arr * df * (U @ phi_re)                         # (M,)
 
@@ -238,9 +308,9 @@ class HestonCOSPricer:
         return price_arr
 
     def price_call(self, K, tau, N=160, L=None):
-        """European call price via COS; thin wrapper over ``price(..., cp=+1)``."""
+        """Call price via COS; thin wrapper over price(..., cp=+1)."""
         return self.price(K, tau, cp=1, N=N, L=L)
 
     def price_put(self, K, tau, N=160, L=None):
-        """European put price via COS; thin wrapper over ``price(..., cp=-1)``."""
+        """Put price via COS; thin wrapper over price(..., cp=-1)."""
         return self.price(K, tau, cp=-1, N=N, L=L)
