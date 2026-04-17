@@ -59,8 +59,24 @@ def cold_ms(N):
     return float(np.median(samples))
 
 
-def main():
+def _collect():
     p = HestonCOSPricer(**PARAMS)
+    results = []
+    all_ok = True
+    for N, pe, pms in ROWS:
+        v    = p.price_call(K, T, N=N, L=L)
+        err  = abs(v - REF)
+        cold = cold_ms(N)
+        warm = warm_ms(N)
+        err_ok, time_ok = err < pe, warm < pms
+        all_ok &= err_ok and time_ok
+        results.append(dict(N=N, paper_err=pe, err=err,
+                            paper_ms=pms, cold=cold, warm=warm,
+                            err_ok=err_ok, time_ok=time_ok))
+    return results, all_ok
+
+
+def _print_text(results, all_ok):
     print(f"Fang-Oosterlee Table 5 reproducer (T={T}, K={K}, L={L})")
     print(f"Reference value: {REF}")
     print()
@@ -68,31 +84,41 @@ def main():
              f"{'paper ms':>9}  {'cold ms':>8}  {'warm ms':>8}  status"
     print(header)
     print("-" * len(header))
-
-    all_ok = True
-    for N, pe, pms in ROWS:
-        v    = p.price_call(K, T, N=N, L=L)
-        err  = abs(v - REF)
-        cold = cold_ms(N)
-        warm = warm_ms(N)
-        err_ok  = err  < pe
-        time_ok = warm < pms
-        status = "OK" if (err_ok and time_ok) else \
-                 "FAIL (" + ",".join(s for s, ok in [("err", err_ok), ("time", time_ok)] if not ok) + ")"
-        all_ok &= err_ok and time_ok
-        print(f"{N:>4}  {pe:>10.2e}  {err:>10.2e}  "
-              f"{pms:>9.4f}  {cold:>8.4f}  {warm:>8.4f}  {status}")
-
+    for r in results:
+        status = "OK" if (r["err_ok"] and r["time_ok"]) else \
+                 "FAIL (" + ",".join(s for s, ok in
+                     [("err", r["err_ok"]), ("time", r["time_ok"])] if not ok) + ")"
+        print(f"{r['N']:>4}  {r['paper_err']:>10.2e}  {r['err']:>10.2e}  "
+              f"{r['paper_ms']:>9.4f}  {r['cold']:>8.4f}  {r['warm']:>8.4f}  {status}")
     print()
     print("PASS: Heston algorithm universally outperforms Table 5." if all_ok
           else "FAIL: at least one row regressed on error or warm runtime.")
 
-    for N, pe, pms in ROWS:
-        v = p.price_call(K, T, N=N, L=L)
-        assert abs(v - REF) < pe, f"Row N={N}: error {abs(v-REF):.3e} ≥ paper {pe:.3e}"
-        wm = warm_ms(N)
-        assert wm < pms, f"Row N={N}: warm time {wm:.4f}ms ≥ paper {pms:.4f}ms"
 
+def _print_markdown(results):
+    Ns = [r["N"] for r in results]
+    print(f"### Table 5 reproduction — Heston, T={T}, K={K}, L={L}")
+    print(f"Reference: {REF}")
+    print()
+    print("| |" + "|".join(f" N={n} " for n in Ns) + "|")
+    print("|---|" + "|".join("---" for _ in Ns) + "|")
+    print("| paper error    |" + "|".join(f" {r['paper_err']:.2e} " for r in results) + "|")
+    print("| our error      |" + "|".join(f" {r['err']:.2e} "       for r in results) + "|")
+    print("| paper ms       |" + "|".join(f" {r['paper_ms']:.4f} "  for r in results) + "|")
+    print("| cold ms (ours) |" + "|".join(f" {r['cold']:.4f} "      for r in results) + "|")
+    print("| warm ms (ours) |" + "|".join(f" {r['warm']:.4f} "      for r in results) + "|")
+
+
+def main():
+    as_md = "--markdown" in sys.argv or "--md" in sys.argv
+    results, all_ok = _collect()
+    if as_md:
+        _print_markdown(results)
+    else:
+        _print_text(results, all_ok)
+    for r in results:
+        assert r["err_ok"],  f"Row N={r['N']}: error {r['err']:.3e} ≥ paper {r['paper_err']:.3e}"
+        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms ≥ paper {r['paper_ms']:.4f}ms"
     return 0 if all_ok else 1
 
 
