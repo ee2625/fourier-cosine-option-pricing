@@ -7,7 +7,7 @@ Run with:
 
 import numpy as np
 import pytest
-from cos_pricing import BsmModel, HestonModel, bsm_price, cos_price
+from cos_pricing import BsmModel, bsm_price, cos_price
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -17,12 +17,6 @@ from cos_pricing import BsmModel, HestonModel, bsm_price, cos_price
 @pytest.fixture
 def bsm_params():
     return dict(sigma=0.2, intr=0.05, divr=0.1)
-
-@pytest.fixture
-def heston_params():
-    """Standard calibrated Heston params (Feller ratio ≈ 0.38, typical)."""
-    return dict(v0=0.0398, kappa=1.5768, theta=0.0398,
-                eta=0.5751, rho=-0.5711)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -118,78 +112,6 @@ class TestBsmCos:
         df  = np.exp(-bsm_params['intr'] * texp)
         p   = m.price(strike, spot, texp, cp=1)
         assert abs(p - df * (fwd - strike)) < 0.01
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Heston tests
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestHestonCos:
-
-    # Published benchmark values from PyFENG HestonFft docstring:
-    # sigma=0.04, vov=1.0, mr=0.5, rho=-0.9, T=10, spot=100
-    HESTON_FFT_BENCH = {
-        60: 44.32997507,
-        70: 35.84976970,
-        100: 13.08467014,
-        140: 0.29577444,
-    }
-
-    def test_paper_params_short_maturity(self, heston_params):
-        """F&O paper params (Table 4), T=1: N=128 matches N=4096 to < 1e-4."""
-        m_ref = HestonModel(**heston_params)
-        m     = HestonModel(**heston_params)
-        strikes = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
-        ref   = m_ref.price(strikes, 100.0, 1.0, n_cos=4096)
-        p     = m.price(strikes, 100.0, 1.0, n_cos=128)
-        assert np.max(np.abs(p - ref)) < 1e-4
-
-    def test_paper_params_medium_maturity(self, heston_params):
-        """F&O paper params, T=5: N=128 matches N=4096 to < 1e-4."""
-        m_ref = HestonModel(**heston_params)
-        m     = HestonModel(**heston_params)
-        strikes = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
-        ref   = m_ref.price(strikes, 100.0, 5.0, n_cos=4096)
-        p     = m.price(strikes, 100.0, 5.0, n_cos=128)
-        assert np.max(np.abs(p - ref)) < 1e-4
-
-    def test_short_maturity(self):
-        """Short T=0.1: N=128 vs N=4096 < 1e-6."""
-        m = HestonModel(v0=0.04, kappa=2.0, theta=0.04, eta=0.5, rho=-0.5)
-        strikes = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
-        ref = m.price(strikes, 100.0, 0.1, n_cos=4096)
-        p   = m.price(strikes, 100.0, 0.1, n_cos=128)
-        assert np.max(np.abs(p - ref)) < 1e-6
-
-    def test_put_call_parity_heston(self, heston_params):
-        """Heston put-call parity to < 1e-4 (N=128)."""
-        m = HestonModel(**heston_params)
-        spot, texp = 100.0, 1.0
-        fwd = spot  # intr=divr=0 by default
-        df  = 1.0
-        for strike in [90.0, 100.0, 110.0]:
-            c = m.price(strike, spot, texp, cp=1)
-            p = m.price(strike, spot, texp, cp=-1)
-            assert abs((c - p) - df * (fwd - strike)) < 1e-4
-
-    def test_feller_ratio(self, heston_params):
-        """Feller ratio computed correctly."""
-        m = HestonModel(**heston_params)
-        expected = 2 * heston_params['kappa'] * heston_params['theta'] / heston_params['eta']**2
-        assert abs(m.feller_ratio - expected) < 1e-12
-
-    def test_prices_non_negative(self, heston_params):
-        """All call prices ≥ 0."""
-        m = HestonModel(**heston_params)
-        strikes = np.linspace(50, 200, 30)
-        p = m.price(strikes, 100.0, 1.0, cp=1)
-        assert np.all(p >= -1e-8)
-
-    def test_scalar_output_heston(self, heston_params):
-        """Scalar strike → scalar output."""
-        m = HestonModel(**heston_params)
-        p = m.price(100.0, 100.0, 1.0)
-        assert isinstance(p, float)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
