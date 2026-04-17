@@ -119,7 +119,7 @@ is the core optimization target (details below).
 
 The COS price of a European option is (Eq. 21 of the paper):
 
-$$V(x, t) = e^{-r\tau} \, K \sum_{k=0}^{N-1}{\!}' \operatorname{Re}\!\left[\, \varphi\!\left(\tfrac{k\pi}{b-a}\right) \exp\!\left(i\,k\pi\,\tfrac{x-a}{b-a}\right) \,\right] V_k$$
+$$V(x, t) = e^{-r\tau} \, K \sum_{k=0}^{N-1}{\!}' \mathrm{Re}\!\left[\, \varphi\!\left(\tfrac{k\pi}{b-a}\right) \exp\!\left(i\,k\pi\,\tfrac{x-a}{b-a}\right) \,\right] V_k$$
 
 where:
 - $\varphi(u)$ is the characteristic function of $\log(S_T/S_0)$ under the risk-neutral measure
@@ -141,7 +141,7 @@ For Heston, the paper follows four steps:
 
 3. **Compute the payoff coefficients $V_k$ analytically.** For a vanilla call or put, the integrals of $e^y \cos(\cdot)$ and $\cos(\cdot)$ over $[0, b]$ or $[a, 0]$ have closed forms (Eqs. 22-23, 29-30). No numerical integration is needed at this step.
 
-4. **Combine.** The option price is a single *prime-weighted* dot product between $\operatorname{Re}[\varphi(u_k) \cdot \text{phase}_k]$ and $V_k$, discounted by $e^{-r\tau}$. Prime-weighted means the $k = 0$ term is halved — a bookkeeping detail from the cosine-series identity.
+4. **Combine.** The option price is a single *prime-weighted* dot product between $\mathrm{Re}[\varphi(u_k) \cdot \text{phase}_k]$ and $V_k$, discounted by $e^{-r\tau}$. Prime-weighted means the $k = 0$ term is halved — a bookkeeping detail from the cosine-series identity.
 
 Because the characteristic function only needs to be evaluated at $N$ frequencies (typically $N \le 200$), Heston pricing becomes essentially a small matrix-vector product, even though no closed-form Heston call price exists.
 
