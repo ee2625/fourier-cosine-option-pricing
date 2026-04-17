@@ -11,13 +11,14 @@ Reference:
 """
 
 from .cos_method import cos_price
-from .models import BsmModel, HestonModel
+from .models import BsmModel
+from .heston_cos_pricer import HestonCOSPricer
 from .utils import bsm_price, bsm_impvol, convergence_table, benchmark_runtime
 
 __all__ = [
     "cos_price",
     "BsmModel",
-    "HestonModel",
+    "HestonCOSPricer",
     "bsm_price",
     "bsm_impvol",
     "convergence_table",

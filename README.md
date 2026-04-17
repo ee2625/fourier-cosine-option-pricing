@@ -61,7 +61,7 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 **Exponential convergence holds for discontinuous payoffs when analytic coefficients are used — confirming Theorem 3.1 of the paper.**
 
 ### Test suite
-19/19 tests pass covering BSM, Heston, put-call parity, vectorisation, and edge cases.
+29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, L sensitivity, input validation, and edge cases.
 
 ## Implementation
 
@@ -71,10 +71,11 @@ f(x) = N(0,1), recovered from its CF via cosine expansion on [-10, 10]
 - Analytic cumulants (c1, c2, c4=0) for tight truncation range
 - Machine precision at N=64
 
-**`HestonModel`** — Heston (1993) stochastic volatility
-- Branch-cut-safe characteristic function (Lord & Kahl 2010)
-- Analytic cumulants from F&O Appendix A
-- Accurate for typical calibrated parameters at N=128
+**`HestonCOSPricer`** — Heston (1993) stochastic volatility, paper-faithful COS
+- Fang & Oosterlee (2008) Section 4 form: `x = log(S0/K)` centering, classical (D, G) CF, Section 3 analytic payoff coefficients
+- Analytic cumulants from F&O Appendix A set the truncation width via Eq. 49
+- Common-subexpression-optimized characteristic function — one `sqrt`, one `log`, one `exp(-Dτ)` per call
+- Default `L=12` reaches paper-grade accuracy at both T=1 and T=10 with N=160
 
 ### Core formula
 
@@ -103,16 +104,19 @@ fourier-cosine-option-pricing/
 ├── src/
 │   └── cos_pricing/
 │       ├── __init__.py
-│       ├── cos_method.py       # core COS engine (model-agnostic)
-│       ├── models.py           # BsmModel, HestonModel
-│       └── utils.py            # analytic BSM, implied vol, benchmarks
+│       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
+│       ├── models.py                  # BsmModel
+│       ├── heston_cos_pricer.py       # HestonCOSPricer (paper-faithful Section 4 form)
+│       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
-│   └── test_cos_method.py      # 19 tests (BSM + Heston)
+│   ├── test_cos_method.py             # BSM + generic COS engine
+│   └── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 ├── examples/
-│   ├── example_european_option.py   # full demo: BSM + Heston + IV smile
-│   ├── table_1.py                   # Table 1: density recovery from CF
-│   ├── GBM_cos_vs_carr_madan.py     # Table 2: COS vs Carr-Madan
-│   └── table_3.py                   # Table 3: cash-or-nothing option
+│   ├── example_european_option.py     # full demo: BSM + Heston + IV smile
+│   ├── heston_cos_pricer.py           # Heston paper benchmark + convergence tables
+│   ├── table_1.py                     # Table 1: density recovery from CF
+│   ├── GBM_cos_vs_carr_madan.py       # Table 2: COS vs Carr-Madan
+│   └── table_3.py                     # Table 3: cash-or-nothing option
 └── docs/
     └── paper_notes.md
 ```
@@ -129,16 +133,18 @@ pip install -r requirements.txt
 
 ```python
 import numpy as np
-from cos_pricing import BsmModel, HestonModel
+from cos_pricing import BsmModel, HestonCOSPricer
 
 # Black-Scholes-Merton
 m = BsmModel(sigma=0.2, intr=0.05, divr=0.1)
 m.price(np.arange(80, 121, 10), spot=100, texp=1.2)
 # array([15.71361973,  9.69250803,  5.52948546,  2.94558338,  1.48139131])
 
-# Heston stochastic volatility
-m = HestonModel(v0=0.04, kappa=1.5768, theta=0.0398, eta=0.5751, rho=-0.5711)
-m.price(np.array([90, 95, 100, 105, 110]), spot=100, texp=1.0)
+# Heston stochastic volatility (paper-faithful COS, Fang & Oosterlee 2008 §4)
+m = HestonCOSPricer(S0=100, v0=0.0175, lam=1.5768, eta=0.5751,
+                    ubar=0.0398, rho=-0.5711)
+m.price_call(100.0, tau=1.0)    # ≈ 5.785155
+m.price_call(np.array([90, 95, 100, 105, 110]), tau=1.0)
 ```
 
 ## Running the examples
@@ -153,11 +159,14 @@ PYTHONPATH=src python examples/GBM_cos_vs_carr_madan.py
 # Table 3: cash-or-nothing digital option
 PYTHONPATH=src python examples/table_3.py
 
+# Heston COS paper benchmark (T=1 and T=10), convergence and L sensitivity
+PYTHONPATH=src python examples/heston_cos_pricer.py
+
 # Full demo (BSM accuracy, convergence, Heston, implied vol smile)
 PYTHONPATH=src python examples/example_european_option.py
 
 # Run all tests
-python -m pytest tests/test_cos_method.py -v
+python -m pytest tests/ -v
 ```
 
 ## PyFeng Integration

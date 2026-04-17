@@ -117,7 +117,7 @@ def _truncation_range_from_cf(char_func, n_cos, L=12.0, eps=1e-3):
     log(MGF(v)) at v = 0.
 
     Not called when the model provides analytic cumulants
-    (e.g. BsmModel, HestonModel).
+    (e.g. BsmModel).
     """
     # MGF at real arguments: MGF(v) = CF(−iv)
     mgf = lambda v: char_func(-1j * v).real

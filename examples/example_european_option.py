@@ -24,7 +24,7 @@ from scipy.stats import norm
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from cos_pricing import BsmModel, HestonModel, bsm_price, bsm_impvol
+from cos_pricing import BsmModel, HestonCOSPricer, bsm_price, bsm_impvol
 from cos_pricing.utils import convergence_table, benchmark_runtime
 
 SEP = "=" * 62
@@ -103,19 +103,20 @@ benchmark_runtime(
 
 print()
 print(SEP)
-print("4. HestonModel (COS) – standard calibrated parameters")
-print("   v0=0.0398, κ=1.5768, θ=0.0398, η=0.5751, ρ=−0.5711")
+print("4. HestonCOSPricer – standard calibrated parameters")
+print("   v0=0.0398, λ=1.5768, ū=0.0398, η=0.5751, ρ=−0.5711")
 print(SEP)
 
-# F&O (2008) Table 4 parameters
-m_heston = HestonModel(
-    v0=0.0398, kappa=1.5768, theta=0.0398,
+spot_h    = 100.0
+heston_params = dict(
+    v0=0.0398, lam=1.5768, ubar=0.0398,
     eta=0.5751, rho=-0.5711,
 )
-print(f"  Feller ratio 2κθ/η²  = {m_heston.feller_ratio:.4f}")
+m_heston = HestonCOSPricer(S0=spot_h, **heston_params)
+feller   = 2.0 * heston_params["lam"] * heston_params["ubar"] / heston_params["eta"]**2
+print(f"  Feller ratio 2λū/η²  = {feller:.4f}")
 
 strikes_h = np.array([80, 90, 100, 110, 120], dtype=float)
-spot_h    = 100.0
 
 print()
 print(f"  {'Strike':>8}", end="")
@@ -127,7 +128,7 @@ print("  " + "-" * (8 + 4*16))
 for K in strikes_h:
     print(f"  {K:>8.0f}", end="")
     for T in [0.5, 1.0, 2.0, 5.0]:
-        p = m_heston.price(K, spot_h, T)
+        p = m_heston.price_call(float(K), T)
         print(f"  {p:>14.6f}", end="")
     print()
 
@@ -138,17 +139,17 @@ for K in strikes_h:
 
 print()
 print(SEP)
-print("5. Heston put-call parity check  (intr=divr=0)")
+print("5. Heston put-call parity check  (r=q=0)")
 print(SEP)
 
 texp_pcp = 1.0
-fwd_pcp  = spot_h  # intr=divr=0
+fwd_pcp  = spot_h  # r=q=0
 df_pcp   = 1.0
 
 print(f"  {'Strike':>8}  {'Call':>12}  {'Put':>12}  {'PCP error':>14}")
 for K in [90.0, 100.0, 110.0]:
-    c   = m_heston.price(K, spot_h, texp_pcp, cp=1)
-    p   = m_heston.price(K, spot_h, texp_pcp, cp=-1)
+    c   = m_heston.price_call(K, texp_pcp)
+    p   = m_heston.price_put (K, texp_pcp)
     err = abs((c - p) - df_pcp * (fwd_pcp - K))
     print(f"  {K:>8.0f}  {c:>12.6f}  {p:>12.6f}  {err:>14.2e}")
 
@@ -159,14 +160,14 @@ for K in [90.0, 100.0, 110.0]:
 
 print()
 print(SEP)
-print("6. Implied-volatility smile from HestonModel COS prices")
+print("6. Implied-volatility smile from HestonCOSPricer prices")
 print("   T=1.0, spot=100")
 print(SEP)
 
 strikes_iv = np.array([75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125], dtype=float)
 texp_iv    = 1.0
 
-cos_prices = m_heston.price(strikes_iv, spot_h, texp_iv, cp=1)
+cos_prices = m_heston.price_call(strikes_iv, texp_iv)
 iv_smile   = np.array([
     bsm_impvol(p, K, spot_h, texp_iv, cp=1)
     for p, K in zip(cos_prices, strikes_iv)
