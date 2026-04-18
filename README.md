@@ -388,6 +388,16 @@ A version of this implementation integrated into [PyFENG](https://github.com/PyF
 
 The COS pricer — and any option-pricing method — is constrained by **dimensional analysis**. Buckingham's π theorem reduces BSM's five dimensional inputs $(S_0, K, r, \sigma, T)$ to three dimensionless groups $(K/S_0, \sigma\sqrt{T}, rT)$, and Bachelier's analogous inputs to two groups around $(K - F)/(\sigma_n\sqrt{T})$. The pricer uses exactly those groups internally, so the corresponding symmetries hold **by construction**, not by numerical luck.
 
+### Why this matters in practice
+
+Three concrete uses beyond the π-group framing itself:
+
+**1. Correctness tests without analytic references.** If a pricer does not respect the symmetry its model predicts, something in the kernel is wrong. We verify $C(\lambda S, \lambda K) = \lambda\, C(S, K)$ for BSM and Heston, and $C_n(F+\lambda, K+\lambda) = C_n(F, K)$ for Bachelier — neither check needs a closed-form reference. This catches bugs for any model whose density lives in log-moneyness or price-offset coordinates, including models with no known analytic price. Heston invariance here holds to $3\times 10^{-18}$; that is structurally tighter than any comparison against a finite-precision analytic formula could be.
+
+**2. Calibration in dimensionless coordinates.** Because the price surface is a function of the π-groups only, calibration can be done once on $(K/S_0,\, \sigma\sqrt{T})$ instead of separately on every $(S_0, \sigma, T)$ triple. The collapse plot below is the direct visual of this: arbitrarily different raw-parameter combinations all map to the same two-dimensional surface.
+
+**3. Meaningful model comparison.** "Is Bachelier close to BSM?" is an ill-posed question in raw parameters — the answer depends on which $(S_0, \sigma, T)$ is chosen. In π-coordinates the answer is specific: the surfaces differ by less than $3\times 10^{-3}$ near ATM at small $\sigma\sqrt{T}$, widening to ${\sim}\,5\times 10^{-2}$ at the corners. The gap heatmap turns the informal claim "Bachelier approximates BSM for small moves" into a precise inequality on the dimensionless plane.
+
 ### π-groups
 
 | Model | Price group | Moneyness group | Vol / rate group |
