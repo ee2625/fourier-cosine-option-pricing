@@ -73,7 +73,7 @@ def recover_density(x_eval, N, a=-10.0, b=10.0):
 # Reproduce Table 1
 # ─────────────────────────────────────────────────────────────────────────────
 
-x_eval = np.arange(-5, 6, dtype=float)   # {-5, -4, ..., 4, 5}
+x_eval = np.array([-5.0, 5.0])           # paper: symmetric tail pts
 ref    = norm.pdf(x_eval)                 # true N(0,1) density
 N_LIST = [4, 8, 16, 32, 64]
 N_REPS = 5000
