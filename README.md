@@ -98,8 +98,24 @@ is the core optimization target (details below).
 
 **Every row clears both the paper's error and its per-call runtime. Warm runtimes are on the order of 9–15 $\mu$s — roughly an order of magnitude under the paper's 60–420 $\mu$s on 2008 hardware. The per-run reproduction scripts hard-assert these inequalities on every row (`examples/test4.py`, `test5.py`, `test6.py`); they exit non-zero if any cell regresses. Timing figures vary run-to-run; rerun the scripts with `--markdown` to produce a table from your own machine.**
 
+### Variance Gamma model — COS and Carr-Madan (Table 7 reproduction)
+
+$\sigma = 0.12$, $\theta = -0.14$, $\nu = 0.2$, $r = 0.1$, $q = 0$, $S_0 = 100$, $K = 90$.
+
+| | N=128 | N=256 | N=512 | N=1024 | N=2048 |
+|---|---|---|---|---|---|
+| error (T=0.1) | 6.97e-04 | 4.19e-06 | 6.80e-06 | 5.70e-07 | 7.98e-08 |
+
+| | N=30 | N=60 | N=90 | N=120 | N=150 |
+|---|---|---|---|---|---|
+| error (T=1.0) | 7.06e-03 | 1.29e-05 | 2.81e-07 | 3.16e-08 | 1.51e-09 |
+
+T=0.1 shows **algebraic convergence** (order ≈ 3, expected for the VG model at short maturities where the CF decays slowly). T=1.0 shows **exponential convergence** (~1.7 decades per 32 terms, R²=0.96). High-N cross-check at N=2¹⁴ agrees with the paper's reference values to sub-nanosecond precision (diff < 1e-9 for both maturities).
+
+A generic **Carr-Madan FFT pricer** (`carr_madan_price`) is also implemented, using Simpson's-rule weights and cubic-spline interpolation. It agrees with the COS price to better than 1e-5 at large N. The key implementation detail is using `eta=0.05` (not the paper's 0.25) to avoid aliasing error for the default damping `alpha=0.75`.
+
 ### Test suite
-29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, $L$ sensitivity, input validation, and edge cases.
+45/45 tests pass covering BSM, Heston, VG (CF properties, COS convergence, Carr-Madan agreement, density recovery), put-call parity, vectorisation, convergence, $L$ sensitivity, input validation, and edge cases.
 
 ## Implementation
 
@@ -184,6 +200,8 @@ fourier-cosine-option-pricing/
 │       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
 │       ├── models.py                  # BsmModel
 │       ├── heston_cos_pricer.py       # HestonCOSPricer (optimized Heston COS)
+│       ├── vg_model.py                # VgModel (Variance Gamma, COS + cumulants)
+│       ├── carr_madan.py              # carr_madan_price (generic FFT pricer)
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
@@ -194,6 +212,7 @@ fourier-cosine-option-pricing/
 │   ├── table_1.py                     # Table 1: density recovery from CF
 │   ├── table_2.py                     # Table 2: COS vs Carr-Madan
 │   ├── table_3.py                     # Table 3: cash-or-nothing option
+│   ├── table7.py                      # Table 7: Variance Gamma convergence
 │   ├── test4.py                       # Table 4: Heston T=1, single strike
 │   ├── test5.py                       # Table 5: Heston T=10, single strike
 │   └── test6.py                       # Table 6: Heston T=1, 21 strikes
@@ -248,6 +267,9 @@ PYTHONPATH=src python examples/test6.py   # T=1, 21 strikes
 
 # Any of the Heston benchmarks can print README-ready markdown tables:
 PYTHONPATH=src python examples/test4.py --markdown
+
+# Table 7: Variance Gamma COS convergence + Carr-Madan comparison
+PYTHONPATH=src python examples/table7.py
 
 # Heston convergence + L sensitivity demo
 PYTHONPATH=src python examples/heston_tables.py
