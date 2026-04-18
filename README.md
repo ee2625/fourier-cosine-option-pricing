@@ -66,7 +66,9 @@ $K e^{-rT} N(d_2) = 0.273306496497$.
 
 ![Table 3](examples/table_3.png)
 
-The analytic reference value matches the paper exactly. Our implementation shows exponential convergence even for this discontinuous payoff.
+The analytic reference value agrees with the paper’s reported reference value.
+
+For this discontinuous payoff, the error decays very rapidly and reaches machine precision by \(N=60\). Beyond that point, the reported error plateaus because floating-point roundoff dominates.
 
 ### Heston stochastic volatility — Tables 4–6 reproduction
 
