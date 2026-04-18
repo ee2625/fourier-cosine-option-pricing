@@ -11,7 +11,7 @@ Reference:
 """
 
 from .cos_method import cos_price
-from .models import BsmModel
+from .models import BsmModel, NormalCos
 from .heston_cos_pricer import HestonCOSPricer
 from .vg_model import VgModel
 from .carr_madan import carr_madan_price
@@ -21,6 +21,7 @@ from .cgmy_model import CgmyModel
 __all__ = [
     "cos_price",
     "BsmModel",
+    "NormalCos",
     "HestonCOSPricer",
     "VgModel",
     "CgmyModel",
