@@ -37,22 +37,28 @@ The reported error is the maximum absolute error evaluated at x = -5 and x = 5, 
 
 The numerical values are close to the paper and show the same exponential convergence pattern. By \(N=64\), the reconstruction is already at machine precision. This validates the core COS identity that the cosine coefficients of the density can be recovered directly from the characteristic function.
 
-### BSM model, COS versus Carr Mardan (Table 2)
+### BSM model, COS versus Carr-Madan (Table 2)
 
-We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 0, maturity 0.1, and spot 100. The three strike prices are 80, 100, and 120. The corresponding analytic Black Scholes prices are 20.7992, 3.6600, and 0.0446.
+We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 0, maturity 0.1, and spot 100. The three strike prices are 80, 100, and 120. The corresponding analytic Black-Scholes prices are 20.7992, 3.6600, and 0.0446.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---:|---:|---:|---:|---:|
 | COS | msec | 0.0303 | 0.0327 | 0.0349 | 0.0434 | 0.0588 |
 |  | max error | 2.43e-07 | 3.55e-15 | 3.55e-15 | 3.55e-15 | 3.55e-15 |
-| Carr Mardan | msec | 0.0857 | 0.0791 | 0.0853 | 0.0907 | 0.1111 |
+| Carr-Madan | msec | 0.0857 | 0.0791 | 0.0853 | 0.0907 | 0.1111 |
 |  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
 
 ![Table 2](examples/table_2.png)
 
-We replicate the Table 2 setup and reproduce the paper's central result: the COS method exhibits dramatically faster convergence than the Carr Mardan method for European option pricing under GBM. Our implementation further improves on the reported performance, with COS reaching machine precision by \(N=64\) and maintaining lower runtime throughout the experiment.
+We replicate the Table 2 setup and reproduce the paper's central result: the COS method exhibits dramatically faster convergence than the Carr-Madan method for European option pricing under GBM. Our implementation further improves on the reported performance, with COS reaching machine precision by $N=64$ and maintaining lower runtime throughout the experiment.
 
-### Cash or nothing digital option under GBM (Table 3)
+**Why our COS converges faster than the paper.** We use analytic BSM cumulants ($c_1 = -\frac{1}{2}\sigma^2 T$, $c_2 = \sigma^2 T$, $c_4 = 0$) to set the tightest possible truncation range $[a, b]$. For $T=0.1$, $\sigma=0.25$, this gives a window of width $\approx 1.58$, so even $N=32$ cosine terms are already very fine-grained relative to the density's support. The paper uses a wider, more conservative range, which requires more terms to converge.
+
+**Why our Carr-Madan is more accurate than the paper.** We add cubic spline interpolation to evaluate prices at the exact target strike values. The paper evaluates at the nearest grid point with no interpolation, which causes large errors at small $N$ when the strikes do not land on the FFT grid.
+
+---
+
+### Cash-or-nothing digital option under GBM (Table 3)
 
 Parameters: $\sigma = 0.2$, $r = 0.05$, $q = 0$, $T = 0.1$, $S_0 = 100$, $K = 120$.
 
@@ -66,9 +72,9 @@ $K e^{-rT} N(d_2) = 0.273306496497$.
 
 ![Table 3](examples/table_3.png)
 
-The analytic reference value agrees with the paper’s reported reference value.
+The analytic reference value agrees with the paper's reported reference value exactly. For this discontinuous payoff, the error decays very rapidly and reaches machine precision by $N=60$. Beyond that point, the reported error plateaus because floating-point roundoff dominates.
 
-For this discontinuous payoff, the error decays very rapidly and reaches machine precision by \(N=60\). Beyond that point, the reported error plateaus because floating-point roundoff dominates.
+**Why our errors are smaller than the paper's.** Same reason as Table 2: we use analytic BSM cumulants to set a tight truncation range (width $\approx 1.58$), whereas the paper uses a wider range as a deliberate stress test to show that COS still converges exponentially even with a suboptimal interval. Both implementations confirm Theorem 3.1 — exponential convergence holds for discontinuous payoffs when analytic $\psi$ coefficients are used, with no Gibbs phenomenon.
 
 ### Heston stochastic volatility — Tables 4–6 reproduction
 
