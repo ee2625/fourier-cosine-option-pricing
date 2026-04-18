@@ -24,14 +24,12 @@ The focus is on:
 
 ### Density recovery from characteristic function (Table 1)
 \(f(x) = \mathcal{N}(0,1)\), recovered from its characteristic function via cosine expansion on \([-10,10]\).
-Maximum absolute error measured at the two symmetric tail points \(x \in \{-5,5\}\), matching the current `examples/table_1.py` script output.
+Maximum absolute error is measured at the two symmetric tail points \(x \in \{-5,5\}\), matching the current `examples/table_1.py` script output.
 
 | | N=4 | N=8 | N=16 | N=32 | N=64 |
 |---|---:|---:|---:|---:|---:|
-| max error (ours) | 4.9999e-02 | 3.2088e-02 | 3.6067e-03 | 3.1511e-07 | 5.5040e-17 |
-| max error (paper) | 4.9900e-02 | 2.4800e-02 | 1.4000e-03 | 3.5000e-08 | 8.3300e-17 |
-| cpu time (sec, ours) | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 |
-| cpu time (sec, paper) | 0.0025 | 0.0028 | 0.0025 | 0.0031 | 0.0032 |
+| max error | 4.9999e-02 | 3.2088e-02 | 3.6067e-03 | 3.1511e-07 | 5.5040e-17 |
+| cpu time (sec) | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 | ~0.0000 |
 
 ![Table 1](examples/table_1.png)
 
@@ -47,31 +45,25 @@ Reference prices from the analytic Black Scholes formula are \([20.7992,\ 3.66,\
 |  | max error | 2.43e-07 | 3.55e-15 | 3.55e-15 | 3.55e-15 | 3.55e-15 |
 | Carr Mardan | msec | 0.0857 | 0.0791 | 0.0853 | 0.0907 | 0.1111 |
 |  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
-| Paper COS | msec | 0.0401 | 0.0519 | 0.0763 | 0.2532 | 0.4634 |
-| Paper COS | max error | 1.98e-01 | 4.62e-04 | 5.55e-11 | 2.77e-13 | 2.77e-13 |
-| Paper CM | msec | 0.2824 | 0.2749 | 0.3101 | 0.7013 | 1.0596 |
-| Paper CM | max error | 6.85e+05 | 2.09e+02 | 1.11e+00 | 7.57e-02 | 3.57e-03 |
 
 ![Table 2](examples/table_2.png)
 
-This is a qualitative replication rather than an exact numerical reproduction of Table 2. The main result is reproduced clearly: the COS method converges dramatically faster than Carr Mardan for the GBM test case. In our implementation, COS reaches machine precision by \(N=64\), while Carr Mardan still has visible error even at \(N=512\). The exact low \(N\) error magnitudes differ from the paper because they are sensitive to implementation details such as truncation range, damping, Fourier grid choice, and interpolation conventions.
+This is a qualitative replication rather than an exact numerical reproduction of Table 2. The main result is reproduced clearly: the COS method converges dramatically faster than Carr Mardan for the GBM test case. In our implementation, COS reaches machine precision by \(N=64\), while Carr Mardan still has visible error even at \(N=512\).
 
 ### Cash or nothing digital option under GBM (Table 3)
 \(\sigma = 0.2\), \(r = 0.05\), \(q = 0\), \(T = 0.1\), \(S_0 = 100\), \(K = 120\).
-The paper uses the payoff convention \(K \cdot \mathbf{1}_{\{S_T>K\}}\), so the analytic reference value is
-\(K e^{-rT} N(d_2) = 0.273306496497\), which our implementation matches exactly.
+The payoff convention is \(K \cdot \mathbf{1}_{\{S_T>K\}}\), so the analytic reference value is
+\(K e^{-rT} N(d_2) = 0.273306496497\).
 
 | | N=40 | N=60 | N=80 | N=100 | N=120 | N=140 |
 |---|---:|---:|---:|---:|---:|---:|
 | COS price | 0.273306492092 | 0.273306496497 | 0.273306496497 | 0.273306496497 | 0.273306496497 | 0.273306496497 |
-| error (ours) | 4.40e-09 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 |
-| msec (ours) | 0.0165 | 0.0169 | 0.0178 | 0.0182 | 0.0190 | 0.0202 |
-| error (paper) | 2.46e-02 | 1.64e-02 | 6.35e-04 | 6.85e-06 | 2.44e-08 | 2.79e-11 |
-| msec (paper) | 0.0330 | 0.0334 | 0.0376 | 0.0428 | 0.0486 | 0.0497 |
+| error | 4.40e-09 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 |
+| cpu time (msec) | 0.0165 | 0.0169 | 0.0178 | 0.0182 | 0.0190 | 0.0202 |
 
 ![Table 3](examples/table_3.png)
 
-The exact reference value matches the paper. Our COS errors are smaller than the paper's at every \(N\), while preserving the same exponential convergence pattern. This is consistent with using analytic payoff coefficients and a tight truncation interval from the model cumulants. The experiment confirms that COS remains exponentially convergent even for this discontinuous payoff, with no visible Gibbs type deterioration in the option value itself.
+The exact reference value matches the paper. Our implementation shows exponential convergence even for this discontinuous payoff, with no visible deterioration in the option value itself.
 
 ### Heston stochastic volatility — Tables 4–6 reproduction
 
