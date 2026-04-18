@@ -16,12 +16,14 @@ from .heston_cos_pricer import HestonCOSPricer
 from .vg_model import VgModel
 from .carr_madan import carr_madan_price
 from .utils import bsm_price, bsm_impvol, convergence_table, benchmark_runtime
+from .cgmy_model import CgmyModel
 
 __all__ = [
     "cos_price",
     "BsmModel",
     "HestonCOSPricer",
     "VgModel",
+    "CgmyModel",
     "carr_madan_price",
     "bsm_price",
     "bsm_impvol",
