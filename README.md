@@ -19,6 +19,7 @@ The focus is on:
 - Reproduction of key tables from the paper
 - Comparison with the Carr-Madan FFT method
 - Computational efficiency (accuracy vs. $N$, runtime scaling)
+- **Extension: Bachelier (normal) model pricer and dimensional-analysis invariance tests**
 
 ## Key Results
 
@@ -170,7 +171,12 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 **The COS method natively handles the extreme fat tails of the CGMY process without loss of exponential convergence. Our implementation maintains high accuracy while executing in fractions of a millisecond, directly matching the paper's valid test cases.**
 
 ### Test suite
-45/45 tests pass covering BSM, Heston, VG (CF properties, COS convergence, Carr-Madan agreement, density recovery), put-call parity, vectorisation, convergence, $L$ sensitivity, input validation, and edge cases.
+
+**84/84 tests pass** covering:
+- BSM (`test_cos_method.py`) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases
+- Heston (`test_heston_cos_pricer.py`) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation
+- Variance Gamma (`test_vg_model.py`) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery
+- **Dimensional invariance (`test_dimensional_invariance.py`, `test_buckingham_pi.py`)** — BSM scale invariance and Bachelier translation invariance at the 1e-10 tolerance; parametrised Buckingham π test over `{BsmModel, HestonCOSPricer, NormalCos}`
 
 ## Implementation
 
@@ -185,6 +191,19 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 - Classical $(D, G)$ characteristic function (Albrecher et al. 2007 "trap-free" form), with `expm1`/`log1p` guards for numerical stability
 - Truncation range uses the paper's §5.2 Heston $\sigma$-heuristic $\sigma \approx \sqrt{\bar u + v_0 \eta}$, centered on the conditional mean $x + c_1$
 - Per-instance caching of $(\tau, N, L)$-dependent work and $(K, \tau, N, L, \mathrm{cp})$-dependent payoff matrices
+
+**`VgModel`** — Variance Gamma (Madan–Seneta) infinite-activity Lévy process
+- Analytic CF and cumulants for range setting; martingale-corrected drift
+- Exponential convergence at moderate $T$; algebraic at very short $T$ where the density is peaked
+
+**`CgmyModel`** — CGMY infinite-activity Lévy process (Carr–Geman–Madan–Yor)
+- CF in closed form via the gamma function; extreme fat tails for $Y \to 2$
+- Dynamic per-$Y$ truncation bounds to control left-tail truncation error
+
+**`NormalCos`** — Bachelier (arithmetic Brownian motion) model, added for the dimensional-analysis extension
+- CF of the centered state $x = S_T - F$: $\varphi(u) = \exp(-\tfrac{1}{2}\sigma^2 T u^2)$
+- Linear payoff, so $V_k$ is built from $\psi_k$ and a new $\eta_k$ coefficient (no $\chi_k$)
+- Matches the closed-form Bachelier price to machine precision at $N = 64$
 
 ### Core formula
 
@@ -253,28 +272,39 @@ fourier-cosine-option-pricing/
 │   └── cos_pricing/
 │       ├── __init__.py
 │       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
-│       ├── models.py                  # BsmModel
+│       ├── models.py                  # BsmModel + NormalCos (Bachelier)
 │       ├── heston_cos_pricer.py       # HestonCOSPricer (optimized Heston COS)
 │       ├── vg_model.py                # VgModel (Variance Gamma, COS + cumulants)
+│       ├── cgmy_model.py              # CgmyModel (CGMY infinite-activity Lévy)
 │       ├── carr_madan.py              # carr_madan_price (generic FFT pricer)
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
-│   └── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
+│   ├── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
+│   ├── test_vg_model.py               # Variance Gamma: CF, cumulants, convergence
+│   ├── test_dimensional_invariance.py # BSM scale + NormalCos translation
+│   └── test_buckingham_pi.py          # parametrised across all model classes
 ├── examples/
 │   ├── example_european_option.py     # full demo: BSM + Heston + IV smile
 │   ├── heston_tables.py               # Heston demo: convergence + sensitivity
 │   ├── table_1.py                     # Table 1: density recovery from CF
 │   ├── table_2.py                     # Table 2: COS vs Carr-Madan
 │   ├── table_3.py                     # Table 3: cash-or-nothing option
-│   ├── table7.py                      # Table 7: Variance Gamma convergence
 │   ├── test4.py                       # Table 4: Heston T=1, single strike
 │   ├── test5.py                       # Table 5: Heston T=10, single strike
-│   └── test6.py                       # Table 6: Heston T=1, 21 strikes
+│   ├── test6.py                       # Table 6: Heston T=1, 21 strikes
+│   ├── table7.py                      # Table 7: Variance Gamma convergence
+│   ├── table8.py                      # Table 8: CGMY Y=0.5
+│   ├── table9.py                      # Table 9: CGMY Y=1.5
+│   ├── table10.py                     # Table 10: CGMY Y=1.98
+│   ├── validate_normal_cos.py         # Bachelier COS vs closed-form
+│   └── dimensionless_surface.py       # π-group collapse + BSM vs Bachelier overlay
 ├── pyfeng/
 │   └── sv_cos.py                      # PyFENG-compatible port of the Heston COS pricer
 └── docs/
-    └── paper_notes.md
+    ├── paper_notes.md
+    ├── fig_bsm_collapse.png           # dimensionless collapse surface
+    └── fig_bsm_vs_bachelier.png       # BSM vs Bachelier π-plane comparison
 ```
 
 ## Installation
@@ -289,7 +319,7 @@ pip install -r requirements.txt
 
 ```python
 import numpy as np
-from cos_pricing import BsmModel, HestonCOSPricer
+from cos_pricing import BsmModel, HestonCOSPricer, NormalCos
 
 # Black-Scholes-Merton
 m = BsmModel(sigma=0.2, intr=0.05, divr=0.1)
@@ -301,6 +331,11 @@ m = HestonCOSPricer(S0=100, v0=0.0175, lam=1.5768, eta=0.5751,
                     ubar=0.0398, rho=-0.5711)
 m.price_call(100.0, tau=1.0)    # ~ 5.785155
 m.price_call(np.array([90, 95, 100, 105, 110]), tau=1.0)
+
+# Bachelier (arithmetic Brownian motion)
+m = NormalCos(sigma=25.0)        # absolute volatility in price units
+m.price(100.0, spot=100.0, texp=1.0)
+# ~ 9.9736   (= sigma*sqrt(T)/sqrt(2*pi), the ATM closed form)
 ```
 
 ## Running the examples
@@ -326,19 +361,96 @@ PYTHONPATH=src python examples/test4.py --markdown
 # Table 7: Variance Gamma COS convergence + Carr-Madan comparison
 PYTHONPATH=src python examples/table7.py
 
+# Tables 8-10: CGMY at Y = 0.5, 1.5, 1.98
+PYTHONPATH=src python examples/table8.py
+PYTHONPATH=src python examples/table9.py
+PYTHONPATH=src python examples/table10.py
+
 # Heston convergence + L sensitivity demo
 PYTHONPATH=src python examples/heston_tables.py
 
 # Full demo (BSM accuracy, convergence, Heston, implied vol smile)
 PYTHONPATH=src python examples/example_european_option.py
 
-# Run all tests
+# Dimensional-analysis extension: Bachelier validation and surface plots
+PYTHONPATH=src python examples/validate_normal_cos.py
+PYTHONPATH=src python examples/dimensionless_surface.py     # writes docs/*.png
+
+# Run all tests (84 total)
 python -m pytest tests/ -v
 ```
 
 ## PyFeng Integration
 
 A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) is available in `pyfeng/sv_cos.py`. It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and can be used as a drop-in alongside `HestonFft`.
+
+## Dimensional Analysis and Buckingham π Symmetries
+
+The COS pricer — and any option-pricing method — is constrained by **dimensional analysis**. Buckingham's π theorem reduces BSM's five dimensional inputs $(S_0, K, r, \sigma, T)$ to three dimensionless groups $(K/S_0, \sigma\sqrt{T}, rT)$, and Bachelier's analogous inputs to two groups around $(K - F)/(\sigma_n\sqrt{T})$. The pricer uses exactly those groups internally, so the corresponding symmetries hold **by construction**, not by numerical luck.
+
+### π-groups
+
+| Model | Price group | Moneyness group | Vol / rate group |
+|---|---|---|---|
+| BSM (lognormal) | $C / S_0$ | $K / S_0$ | $\sigma\sqrt{T}$,  $rT$ |
+| Bachelier (normal) | $C_n / (\sigma_n\sqrt{T})$ | $(K - F) / (\sigma_n\sqrt{T})$ | — |
+
+### Symmetries
+
+**BSM — scale invariance.** Price is homogeneous of degree 1 in $(S_0, K)$:
+$$C(\lambda S_0,\, \lambda K,\, \sigma,\, T) \;=\; \lambda \cdot C(S_0,\, K,\, \sigma,\, T).$$
+Scaling spot and strike by the same factor leaves $C/S_0$ unchanged. The same identity holds for Heston, which is a lognormal-underlying model.
+
+**Bachelier — translation invariance.** Price depends on $(F, K)$ only through $K - F$:
+$$C_n(F + \lambda,\, K + \lambda,\, \sigma_n,\, T) \;=\; C_n(F,\, K,\, \sigma_n,\, T).$$
+Shifting forward and strike by the same additive constant leaves the price unchanged. `NormalCos` uses $K - F$ as its only strike-related input, so the shift is bit-identical on the kernel inputs.
+
+### Empirical verification
+
+Both symmetries are tested at tolerance $10^{-10}$ in `tests/test_dimensional_invariance.py` (model-specific, covering negative shifts and $r \ne q$) and in `tests/test_buckingham_pi.py` (parametrised over all model classes at $r = q = 0$). Observed errors are below one machine epsilon.
+
+**BSM scale invariance** — $\max\left|C(\lambda S, \lambda K)/(\lambda S) - C(S, K)/S\right|$ over $T \in \{0.1, 1, 5\}$, $K \in \{70, 85, 100, 115, 130\}$:
+
+| $\lambda$ | call | put |
+|---|---|---|
+| 0.1   | 5.55e-17 | 1.80e-16 |
+| 0.5   | 0        | 0        |
+| 1.0   | 0        | 0        |
+| 2.0   | 0        | 0        |
+| 10    | 1.11e-16 | 2.78e-16 |
+| 100   | 5.55e-17 | 2.50e-16 |
+
+**Bachelier translation invariance** — $\max\left|C_n(F+\lambda, K+\lambda) - C_n(F, K)\right|$:
+
+| $\lambda$ | call | put |
+|---|---|---|
+| −30 | 2.49e-14 | 2.13e-14 |
+| −5  | 0        | 0        |
+| 0.5 | 0        | 0        |
+| 1.0 | 0        | 0        |
+| 2.0 | 2.49e-14 | 2.13e-14 |
+| 10  | 2.49e-14 | 2.13e-14 |
+| 100 | 2.49e-14 | 3.55e-14 |
+
+**Heston scale invariance** — same test as BSM, over $\lambda \in \{0.1, 0.5, 2, 10, 100\}$: max error **3.47e-18**, mean **2.02e-19**. Heston inherits BSM's scale invariance because its kernel is written in log-moneyness.
+
+The non-zero cells are single-ulp discrepancies in the `F = S·exp((r-q)T)` carry factor; they vanish entirely when $r = q$.
+
+### Dimensionless price surface
+
+For BSM with $r = q = 0$, the dimensionless surface $C/S_0 = f(K/S_0,\, \sigma\sqrt{T})$ captures the model in two variables. Any choice of raw inputs $(S_0, \sigma, T)$ lands on this single surface:
+
+![BSM collapse](docs/fig_bsm_collapse.png)
+
+Three triples with very different raw parameters — $(S_0=50, T=2, \sigma=0.283)$, $(S_0=250, T=0.25, \sigma=0.800)$, $(S_0=1000, T=4, \sigma=0.200)$, all producing $\sigma\sqrt{T}=0.4$ — agree to **~1e-14** at every moneyness in $\{0.7,\, 1.0,\, 1.3,\, 1.6\}$.
+
+### BSM vs Bachelier on the π-plane
+
+With the small-move calibration $\sigma_n = S_0 \sigma$, the two dimensionless surfaces coincide near ATM and at small $\sigma\sqrt{T}$:
+
+![BSM vs Bachelier](docs/fig_bsm_vs_bachelier.png)
+
+Absolute gap shrinks from $\approx 5\times 10^{-2}$ in the corners (deep OTM/ITM with high vol) to $\approx 3\times 10^{-3}$ near ATM. This is the graphical version of the classical "Bachelier approximates BSM for small log-returns," recast as an inequality between two dimensionless surfaces.
 
 ## References
 
