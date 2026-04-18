@@ -64,7 +64,7 @@ def _print_text(results):
 def _print_markdown(results):
     """[Teammate Reference] Borrowed from test4.py for easy README updates."""
     Ns = [r["N"] for r in results]
-    print(f"### Table 8 reproduction — CGMY, Y={PARAMS['Y']}, T={T}, K={K}")
+    print(f"### Table 9 reproduction — CGMY, Y={PARAMS['Y']}, T={T}, K={K}")
     print(f"Reference: {REF}")
     print()
     print("| |" + "|".join(f" N={n} " for n in Ns) + "|")
