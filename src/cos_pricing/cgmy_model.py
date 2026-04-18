@@ -13,15 +13,6 @@ class CgmyModel:
     """
     CGMY infinite activity Lévy model.
     Optimized for array-based characteristic function evaluation.
-
-    Parameters
-    ----------
-    C    : float  Measure of the overall level of activity.
-    G    : float  Controls the rate of exponential decay on the right tail.
-    M    : float  Controls the rate of exponential decay on the left tail.
-    Y    : float  Controls the fine structure of the jump process (fatness of tails).
-    intr : float  Continuously compounded risk-free rate r. Default 0.
-    divr : float  Continuous dividend yield q. Default 0.
     """
     def __init__(self, C, G, M, Y, intr=0.0, divr=0.0):
         self.C = float(C)
@@ -31,14 +22,18 @@ class CgmyModel:
         self.intr = float(intr)
         self.divr = float(divr)
         
-        # --- SPEED OPTIMIZATION ---
         self._gamma_term = self.C * gamma(-self.Y)
         self._m_pow = self.M**self.Y
         self._g_pow = self.G**self.Y
 
+        self._w = -self._gamma_term * (
+            (self.M - 1.0)**self.Y - self._m_pow + 
+            (self.G + 1.0)**self.Y - self._g_pow
+        )
+
     def char_func(self, texp):
         """CF of log(S_T / F) at real or complex frequency u."""
-        drift_coef = (self.intr - self.divr) * texp
+        drift_coef = self._w * texp
         cgmy_coef = texp * self._gamma_term
         
         def cf(u):
