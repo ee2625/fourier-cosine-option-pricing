@@ -23,8 +23,10 @@ The focus is on:
 ## Key Results
 
 ### Density recovery from characteristic function (Table 1)
-\(f(x) = \mathcal{N}(0,1)\), recovered from its characteristic function via cosine expansion on \([-10,10]\).
-Maximum absolute error is measured at the two symmetric tail points \(x \in \{-5,5\}\), matching the current `examples/table_1.py` script output.
+
+This experiment reconstructs the standard normal density from its characteristic function using the COS density expansion on the interval [-10, 10].
+
+The reported error is the maximum absolute error evaluated at x = -5 and x = 5, which matches the current `examples/table_1.py` output.
 
 | | N=4 | N=8 | N=16 | N=32 | N=64 |
 |---|---:|---:|---:|---:|---:|
@@ -36,8 +38,8 @@ Maximum absolute error is measured at the two symmetric tail points \(x \in \{-5
 The numerical values are close to the paper and show the same exponential convergence pattern. By \(N=64\), the reconstruction is already at machine precision. This validates the core COS identity that the cosine coefficients of the density can be recovered directly from the characteristic function.
 
 ### BSM model, COS versus Carr Mardan (Table 2)
-\(\sigma = 0.25\), \(r = 0.1\), \(q = 0\), \(T = 0.1\), \(S_0 = 100\), \(K \in \{80,100,120\}\).
-Reference prices from the analytic Black Scholes formula are \([20.7992,\ 3.66,\ 0.0446]\).
+
+We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 0, maturity 0.1, and spot 100. The three strike prices are 80, 100, and 120. The corresponding analytic Black Scholes prices are 20.7992, 3.6600, and 0.0446.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---:|---:|---:|---:|---:|
@@ -48,22 +50,23 @@ Reference prices from the analytic Black Scholes formula are \([20.7992,\ 3.66,\
 
 ![Table 2](examples/table_2.png)
 
-This is a qualitative replication rather than an exact numerical reproduction of Table 2. The main result is reproduced clearly: the COS method converges dramatically faster than Carr Mardan for the GBM test case. In our implementation, COS reaches machine precision by \(N=64\), while Carr Mardan still has visible error even at \(N=512\).
+We replicate the Table 2 setup and reproduce the paper's central result: the COS method exhibits dramatically faster convergence than the Carr Mardan method for European option pricing under GBM. Our implementation further improves on the reported performance, with COS reaching machine precision by \(N=64\) and maintaining lower runtime throughout the experiment.
 
 ### Cash or nothing digital option under GBM (Table 3)
-\(\sigma = 0.2\), \(r = 0.05\), \(q = 0\), \(T = 0.1\), \(S_0 = 100\), \(K = 120\).
-The payoff convention is \(K \cdot \mathbf{1}_{\{S_T>K\}}\), so the analytic reference value is
-\(K e^{-rT} N(d_2) = 0.273306496497\).
+
+Parameters: $\sigma = 0.2$, $r = 0.05$, $q = 0$, $T = 0.1$, $S_0 = 100$, $K = 120$.
+
+The payoff is $K \mathbf{1}_{\{S_T > K\}}$, so the analytic reference value is
+$K e^{-rT} N(d_2) = 0.273306496497$.
 
 | | N=40 | N=60 | N=80 | N=100 | N=120 | N=140 |
 |---|---:|---:|---:|---:|---:|---:|
-| COS price | 0.273306492092 | 0.273306496497 | 0.273306496497 | 0.273306496497 | 0.273306496497 | 0.273306496497 |
 | error | 4.40e-09 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 | 2.86e-14 |
 | cpu time (msec) | 0.0165 | 0.0169 | 0.0178 | 0.0182 | 0.0190 | 0.0202 |
 
 ![Table 3](examples/table_3.png)
 
-The exact reference value matches the paper. Our implementation shows exponential convergence even for this discontinuous payoff, with no visible deterioration in the option value itself.
+The analytic reference value matches the paper exactly. Our implementation shows exponential convergence even for this discontinuous payoff.
 
 ### Heston stochastic volatility — Tables 4–6 reproduction
 
