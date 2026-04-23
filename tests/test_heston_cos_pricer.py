@@ -113,6 +113,41 @@ def test_chi_psi_broadcasting():
     assert abs(psi_v[0] - (d - c)) < 1e-14
 
 
+def test_char_func_is_mgf_on_imaginary_axis():
+    """char_func(u) must equal mgf_logprice(i*u) — the only definition gap."""
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    u = np.linspace(0.1, 5.0, 11)
+    cf  = m.char_func(u, 1.0)
+    mgf = m.mgf_logprice(1j * u, 1.0)
+    assert np.max(np.abs(cf - mgf)) < 1e-14
+
+
+def test_analytic_c1_matches_mgf_first_derivative():
+    """The analytic c1 from _c1 must agree with d/duu log(MGF)|_0 at FD precision."""
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    for tau in (0.5, 1.0, 5.0, 10.0):
+        c1_an = m._c1(tau)
+        eps = 1e-4
+        K = lambda uu: float(np.log(m.mgf_logprice(uu, tau)).real)
+        c1_num = (K(eps) - K(-eps)) / (2.0 * eps)
+        assert abs(c1_num - c1_an) < 1e-7, f"tau={tau}: c1 mismatch {c1_num} vs {c1_an}"
+
+
+def test_mgf_satisfies_martingale_property():
+    """Under the risk-neutral measure, M(uu=1) must equal exp((r-q)*tau)
+    for any well-formed asset-price MGF. This is a non-circular check on
+    mgf_logprice itself: a typo in the Heston transform almost always
+    breaks this identity. r != q variant catches drift-handling bugs.
+    """
+    for params in [PAPER_PARAMS, dict(PAPER_PARAMS, r=0.05, q=0.02)]:
+        m = HestonCOSPricer(**params)
+        for tau in (0.1, 1.0, 5.0):
+            got      = complex(m.mgf_logprice(1.0, tau))
+            expected = np.exp((m.r - m.q) * tau)
+            assert abs(got.imag) < 1e-12,                 "M(1) should be real"
+            assert abs(got.real - expected) < 1e-12,      f"tau={tau}: martingale violated"
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Input validation
 # ─────────────────────────────────────────────────────────────────────────────

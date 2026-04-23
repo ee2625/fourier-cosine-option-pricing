@@ -45,33 +45,23 @@ N_WARM = 1000
 N_COLD = 300
 
 
-def _cf(u, T):
-    """Heston CF of log(S_T/S0); evaluated at complex u for Lewis formula."""
-    S0_, v0, lam, eta, ubar, rho, r, q = (PARAMS["S0"], PARAMS["v0"], PARAMS["lam"],
-                                          PARAMS["eta"], PARAMS["ubar"], PARAMS["rho"],
-                                          PARAMS["r"], PARAMS["q"])
-    iu = 1j * u
-    beta = lam - eta * rho * iu
-    D = np.sqrt(beta * beta + eta * eta * (u * u + iu))
-    G = (beta - D) / (beta + D)
-    exp_mDt = np.exp(-D * T)
-    one_m_Gexp = 1.0 - G * exp_mDt
-    drift = iu * (r - q) * T
-    v0_term = (v0 / (eta * eta)) * (-np.expm1(-D * T)) / one_m_Gexp * (beta - D)
-    log_ratio = np.log(one_m_Gexp / (1.0 - G))
-    ubar_term = (lam * ubar / (eta * eta)) * ((beta - D) * T - 2.0 * log_ratio)
-    return np.exp(drift + v0_term + ubar_term)
+_REF_PRICER = HestonCOSPricer(**PARAMS)        # one source of truth for the Heston CF
 
 
 def reference_prices():
-    """High-precision call prices via the Lewis (2001) inversion formula."""
+    """High-precision call prices via the Lewis (2001) inversion formula.
+
+    Uses the pricer's ``char_func`` (which itself is just ``mgf_logprice``
+    on the imaginary axis), so the Heston transform lives in exactly one
+    place in the codebase.
+    """
     S0_ = PARAMS["S0"]; r = PARAMS["r"]
     refs = np.empty(STRIKES.size)
     for i, K in enumerate(STRIKES):
         lk = np.log(S0_ / K)
 
         def integrand(u, lk=lk):
-            return (_cf(u - 0.5j, T) * np.exp(1j * u * lk)).real / (u * u + 0.25)
+            return (_REF_PRICER.char_func(u - 0.5j, T) * np.exp(1j * u * lk)).real / (u * u + 0.25)
 
         integral, _ = quad(integrand, 0.0, np.inf,
                            limit=2000, epsabs=1e-16, epsrel=1e-14)

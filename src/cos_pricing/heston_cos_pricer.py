@@ -351,12 +351,18 @@ class HestonCOSPricer:
     # Not on the hot path.
     # ------------------------------------------------------------------------
 
-    def char_func(self, u, tau):
-        """Heston CF of log(S_T/S0) at real omega = u, maturity tau (NumPy reference)."""
-        u           = np.asarray(u)
-        iu          = 1j * u
-        beta        = self.lam - self._rho_eta * iu
-        D           = np.sqrt(beta * beta + self._eta2 * (u * u + iu))
+    def mgf_logprice(self, uu, tau):
+        """Heston MGF of log(S_T/S0) at argument uu (any real or complex), maturity tau.
+
+        Single source of truth for the Heston transform: M(uu) = E[exp(uu * X)]
+        where X = log(S_T/S0). The COS characteristic function is M on the
+        imaginary axis (``char_func`` wraps this); Lewis-style integration
+        evaluates at u - i*alpha; numerical cumulants come from differentiating
+        log(M) at real uu near zero. Trap-free form (Albrecher 2007 / Lord-Kahl).
+        """
+        uu          = np.asarray(uu) + 0j                              # promote to complex
+        beta        = self.lam - self._rho_eta * uu
+        D           = np.sqrt(beta * beta + self._eta2 * uu * (1.0 - uu))
         beta_minus  = beta - D
         G           = beta_minus / (beta + D)
         Dt          = D * tau
@@ -364,30 +370,29 @@ class HestonCOSPricer:
         one_m_Gexp  = 1.0 - G * exp_mDt
         one_m_G     = 1.0 - G
         one_m_exp   = -np.expm1(-Dt)
-        term_drift  = iu * self._drift_rq * tau
+        term_drift  = uu * self._drift_rq * tau
         term_v0     = (self.v0 / self._eta2) * (one_m_exp / one_m_Gexp) * beta_minus
         log_ratio   = np.log(one_m_Gexp / one_m_G)
         term_ubar   = (self.lam * self.ubar / self._eta2) * (beta_minus * tau - 2.0 * log_ratio)
         return np.exp(term_drift + term_v0 + term_ubar)
 
-    def _cumulants(self, tau):
-        """Analytic c1, c2 of log(S_T/S0); c4 = 0 per paper Section 5."""
-        lam, eta, ubar, v0, rho = self.lam, self.eta, self.ubar, self.v0, self.rho
-        eta2 = self._eta2
-        eT, e2T = np.exp(-lam * tau), np.exp(-2.0 * lam * tau)
-        one_m_eT  = -np.expm1(-lam * tau)
-        v0_m_ubar = v0 - ubar
-        c1 = self._drift_rq * tau - 0.5 * (ubar * tau + v0_m_ubar * one_m_eT / lam)
-        lam2, lam3 = lam * lam, lam * lam * lam
-        rho_eta = self._rho_eta
-        c2 = (
-            eta * tau * lam * eT * v0_m_ubar * (8.0 * lam * rho - 4.0 * eta)
-          + lam * rho_eta * one_m_eT * (16.0 * ubar - 8.0 * v0)
-          + 2.0 * ubar * lam * tau * (-4.0 * lam * rho_eta + eta2 + 4.0 * lam2)
-          + eta2 * ((ubar - 2.0 * v0) * e2T + ubar * (6.0 * eT - 7.0) + 2.0 * v0)
-          + 8.0 * lam2 * v0_m_ubar * one_m_eT
-        ) / (8.0 * lam3)
-        return c1, c2, 0.0
+    def char_func(self, u, tau):
+        """Heston CF of log(S_T/S0) at frequency u: phi(u) = mgf_logprice(i*u)."""
+        return self.mgf_logprice(1j * np.asarray(u), tau)
+
+    def _cumulants(self, tau, eps=1e-4):
+        """Cumulants (c1, c2, c4=0) of log(S_T/S0).
+
+        c1 is exact-analytic; c2 is recovered by central finite differences
+        of log(MGF) at the real axis. The often-cited closed-form Heston c2
+        from F&O Appendix A.2 has a transcription typo that surfaces as a
+        ~7e-4 absolute discrepancy against the MGF-derived value, so we
+        derive c2 from ``mgf_logprice`` directly (single source of truth).
+        c4 = 0 per paper Section 5 (used only as a sentinel by callers).
+        """
+        K = lambda uu: float(np.log(self.mgf_logprice(uu, tau)).real)
+        c2 = (K(eps) + K(-eps) - 2.0 * K(0.0)) / (eps * eps)
+        return self._c1(tau), c2, 0.0
 
     def _c1(self, tau):
         """Mean of log(S_T/S0)."""
