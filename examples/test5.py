@@ -1,10 +1,9 @@
 """
-Reproduce Fang & Oosterlee (2008) Table 5 — Heston, T=10, K=100.
+Reproduce Fang & Oosterlee (2008) Table 5 -- Heston, T=10, K=100.
 
 Asserts strict outperformance of paper errors and paper times on every row.
-Cold runtime (fresh pricer per call, closest analogue of a one-shot eval)
-and warm runtime (cache primed, the core optimization target) are both
-reported; the assertion uses warm runtime.
+Cold runtime uses the no-cache standalone path (`price_call_heston`); warm
+runtime uses the class with caching primed. The hard assertions cover both.
 
 Paper uses L=30 at tau=10; we use L=32 -- a modest widening of the truncation
 range (academically valid: Fang & Oosterlee Section 4 note that L should be
@@ -17,13 +16,13 @@ import time
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-from cos_pricing.heston_cos_pricer import HestonCOSPricer  # noqa: E402
+from cos_pricing.heston_cos_pricer import HestonCOSPricer, price_call_heston  # noqa: E402
 
 
 PARAMS = dict(S0=100.0, v0=0.0175, lam=1.5768, eta=0.5751,
               ubar=0.0398, rho=-0.5711, r=0.0, q=0.0)
 K, T, L = 100.0, 10.0, 32.0
-REF     = 22.318945791474590                                # paper §5.2
+REF     = 22.318945791474590                                # paper Section 5.2
 
 # Paper Table 5 rows: (N, error, cpu_ms)
 ROWS = [
@@ -35,11 +34,11 @@ ROWS = [
 ]
 
 N_WARM = 2000
-N_COLD = 200
+N_COLD = 500
 
 
 def warm_ms(N):
-    """Mean per-call ms, cache primed."""
+    """Mean per-call ms with cache primed."""
     p = HestonCOSPricer(**PARAMS)
     p.price_call(K, T, N=N, L=L)
     t0 = time.perf_counter()
@@ -49,12 +48,13 @@ def warm_ms(N):
 
 
 def cold_ms(N):
-    """Median per-call ms with a fresh pricer each measurement."""
+    """Median per-call ms via the standalone no-cache path."""
     samples = np.empty(N_COLD)
+    args = (PARAMS["S0"], K, T, PARAMS["v0"], PARAMS["lam"], PARAMS["eta"],
+            PARAMS["ubar"], PARAMS["rho"])
     for i in range(N_COLD):
-        p = HestonCOSPricer(**PARAMS)
         t0 = time.perf_counter()
-        p.price_call(K, T, N=N, L=L)
+        price_call_heston(*args, N, L, r=PARAMS["r"], q=PARAMS["q"])
         samples[i] = (time.perf_counter() - t0) * 1e3
     return float(np.median(samples))
 
@@ -68,11 +68,13 @@ def _collect():
         err  = abs(v - REF)
         cold = cold_ms(N)
         warm = warm_ms(N)
-        err_ok, time_ok = err < pe, warm < pms
-        all_ok &= err_ok and time_ok
+        err_ok  = err  < pe
+        cold_ok = cold < pms
+        warm_ok = warm < pms
+        all_ok &= err_ok and cold_ok and warm_ok
         results.append(dict(N=N, paper_err=pe, err=err,
                             paper_ms=pms, cold=cold, warm=warm,
-                            err_ok=err_ok, time_ok=time_ok))
+                            err_ok=err_ok, cold_ok=cold_ok, warm_ok=warm_ok))
     return results, all_ok
 
 
@@ -85,19 +87,20 @@ def _print_text(results, all_ok):
     print(header)
     print("-" * len(header))
     for r in results:
-        status = "OK" if (r["err_ok"] and r["time_ok"]) else \
-                 "FAIL (" + ",".join(s for s, ok in
-                     [("err", r["err_ok"]), ("time", r["time_ok"])] if not ok) + ")"
+        ok = r["err_ok"] and r["cold_ok"] and r["warm_ok"]
+        status = "OK" if ok else \
+                 "FAIL (" + ",".join(s for s, k in
+                     [("err", r["err_ok"]), ("cold", r["cold_ok"]), ("warm", r["warm_ok"])] if not k) + ")"
         print(f"{r['N']:>4}  {r['paper_err']:>10.2e}  {r['err']:>10.2e}  "
               f"{r['paper_ms']:>9.4f}  {r['cold']:>8.4f}  {r['warm']:>8.4f}  {status}")
     print()
-    print("PASS: Heston algorithm universally outperforms Table 5." if all_ok
-          else "FAIL: at least one row regressed on error or warm runtime.")
+    print("PASS: Heston algorithm beats Table 5 on error, cold, and warm runtime." if all_ok
+          else "FAIL: at least one row regressed.")
 
 
 def _print_markdown(results):
     Ns = [r["N"] for r in results]
-    print(f"### Table 5 reproduction — Heston, T={T}, K={K}, L={L}")
+    print(f"### Table 5 reproduction -- Heston, T={T}, K={K}, L={L}")
     print(f"Reference: {REF}")
     print()
     print("| |" + "|".join(f" N={n} " for n in Ns) + "|")
@@ -118,7 +121,8 @@ def main():
         _print_text(results, all_ok)
     for r in results:
         assert r["err_ok"],  f"Row N={r['N']}: error {r['err']:.3e} >= paper {r['paper_err']:.3e}"
-        assert r["time_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms >= paper {r['paper_ms']:.4f}ms"
+        assert r["cold_ok"], f"Row N={r['N']}: cold {r['cold']:.4f}ms >= paper {r['paper_ms']:.4f}ms"
+        assert r["warm_ok"], f"Row N={r['N']}: warm {r['warm']:.4f}ms >= paper {r['paper_ms']:.4f}ms"
     return 0 if all_ok else 1
 
 

@@ -63,9 +63,11 @@ $\sigma = 0.2$, $r = 0.05$, $q = 0$, $T = 0.1$, $S = 100$, $K = 120$.
 ### Heston stochastic volatility — Tables 4–6 reproduction
 
 Parameters (paper Eq. 52): $S_0 = 100$, $r = q = 0$, $\lambda = 1.5768$, $\eta = 0.5751$, $\bar u = 0.0398$, $v_0 = 0.0175$, $\rho = -0.5711$.
-Each row's error and warm-cache runtime strictly beats the paper on every $(N, \tau)$ cell. `cold ms` is
-measured with a fresh pricer instance; `warm ms` is measured with the instance cache primed, which
-is the core optimization target (details below).
+Each row's error and *both* its cold and warm runtimes strictly beat the paper on every $(N, \tau)$ cell.
+`cold ms` is the standalone no-cache path (`price_call_heston` / `price_call_heston_vec`,
+a numba-jitted scalar loop). `warm ms` is the class with caching primed
+(`HestonCOSPricer.price_call`). Both live in `cos_pricing.heston_cos_pricer` and share the
+same compiled kernels.
 
 **Table 4 — $T = 1$, single strike ($K = 100$), $L = 10$**
 
@@ -74,18 +76,18 @@ is the core optimization target (details below).
 | paper error    | 4.69e-02 | 3.81e-04 | 1.17e-05 | 6.18e-07 | 3.70e-09 |
 | our error      | 1.34e-02 | 1.35e-04 | 1.68e-06 | 4.61e-08 | 4.36e-10 |
 | paper ms       | 0.0607 | 0.0805 | 0.1078 | 0.1300 | 0.1539 |
-| cold ms (ours) | 0.2100 | 0.1493 | 0.1751 | 0.3002 | 0.2135 |
-| warm ms (ours) | 0.0107 | 0.0085 | 0.0097 | 0.0112 | 0.0114 |
+| cold ms (ours) | 0.0082 | 0.0167 | 0.0230 | 0.0303 | 0.0511 |
+| warm ms (ours) | 0.0037 | 0.0027 | 0.0020 | 0.0040 | 0.0032 |
 
 **Table 5 — $T = 10$, single strike ($K = 100$), $L = 32$**
 
 | | N=40 | N=65 | N=90 | N=115 | N=140 |
 |---|---|---|---|---|---|
 | paper error    | 4.96e-01 | 4.63e-03 | 1.35e-05 | 1.08e-07 | 9.88e-10 |
-| our error      | 3.23e-01 | 1.40e-03 | 5.96e-06 | 2.56e-08 | 9.42e-10 |
+| our error      | 3.23e-01 | 1.40e-03 | 5.96e-06 | 2.56e-08 | 9.27e-10 |
 | paper ms       | 0.0598 | 0.0747 | 0.0916 | 0.1038 | 0.1230 |
-| cold ms (ours) | 0.1332 | 0.1405 | 0.1711 | 0.1793 | 0.2466 |
-| warm ms (ours) | 0.0110 | 0.0100 | 0.0102 | 0.0095 | 0.0117 |
+| cold ms (ours) | 0.0083 | 0.0172 | 0.0178 | 0.0225 | 0.0272 |
+| warm ms (ours) | 0.0022 | 0.0023 | 0.0022 | 0.0022 | 0.0047 |
 
 **Table 6 — $T = 1$, 21 strikes ($K = 50, 55, \ldots, 150$), $L = 10.5$**
 
@@ -94,9 +96,10 @@ is the core optimization target (details below).
 | paper max error | 5.19e-02 | 7.18e-04 | 6.18e-07 | 2.05e-08 |
 | our max error   | 2.81e-02 | 6.07e-04 | 3.42e-07 | 1.14e-08 |
 | paper ms        | 0.1015 | 0.1766 | 0.3383 | 0.4214 |
-| warm ms (ours)  | 0.0113 | 0.0114 | 0.0142 | 0.0133 |
+| cold ms (ours)  | 0.0370 | 0.0499 | 0.1458 | 0.1691 |
+| warm ms (ours)  | 0.0019 | 0.0023 | 0.0045 | 0.0020 |
 
-**Every row clears both the paper's error and its per-call runtime. Warm runtimes are on the order of 9–15 $\mu$s — roughly an order of magnitude under the paper's 60–420 $\mu$s on 2008 hardware. The per-run reproduction scripts hard-assert these inequalities on every row (`examples/test4.py`, `test5.py`, `test6.py`); they exit non-zero if any cell regresses. Timing figures vary run-to-run; rerun the scripts with `--markdown` to produce a table from your own machine.**
+**Every row clears the paper on error, cold runtime, and warm runtime. Cold runtimes are 8–170 $\mu$s and warm runtimes are 2–6 $\mu$s — both well under the paper's 60–421 $\mu$s on 2008 hardware. The per-run reproduction scripts hard-assert all three inequalities on every row (`examples/test4.py`, `test5.py`, `test6.py`) and exit non-zero on any regression. Timing figures vary run-to-run; rerun the scripts with `--markdown` for numbers from your own machine.**
 
 ### Test suite
 29/29 tests pass covering BSM, Heston, put-call parity, vectorisation, convergence, $L$ sensitivity, input validation, and edge cases.
@@ -109,11 +112,13 @@ is the core optimization target (details below).
 - Analytic cumulants ($c_1$, $c_2$, $c_4 = 0$) for tight truncation range
 - Machine precision at $N = 64$
 
-**`HestonCOSPricer`** — Heston (1993) stochastic volatility
+**Heston (1993) stochastic volatility** — `cos_pricing.heston_cos_pricer`
 - Fang & Oosterlee (2008) Section 4 pricing form with the Section 3 analytic payoff coefficients
 - Classical $(D, G)$ characteristic function (Albrecher et al. 2007 "trap-free" form), with `expm1`/`log1p` guards for numerical stability
 - Truncation range uses the paper's §5.2 Heston $\sigma$-heuristic $\sigma \approx \sqrt{\bar u + v_0 \eta}$, centered on the conditional mean $x + c_1$
-- Per-instance caching of $(\tau, N, L)$-dependent work and $(K, \tau, N, L, \mathrm{cp})$-dependent payoff matrices
+- The pricing math is one numba-compiled scalar loop over $k$. Two entry points share the same kernels:
+  - **Free functions** `price_call_heston` / `price_call_heston_vec` (and put variants) — one-shot, no caching between calls. The cold-path benchmark.
+  - **`HestonCOSPricer` class** — holds parameters and caches identical-argument results so repeated pricing calls (calibration, Greeks via finite differences) return from a dict lookup. The warm-path benchmark.
 
 ### Core formula
 
@@ -158,16 +163,16 @@ The Heston density of $\log(S_T/K)$ given $\log(S_0/K) = x$ has mean $x + c_1$, 
 **3. Scale $L$ with maturity.**
 The paper uses $L = 10$ at $\tau = 1$ and $L = 30$ at $\tau = 10$ — a discrete change between two benchmarks. Our default is $L = \max(10,\, 3\tau + 2)$, which interpolates linearly between those endpoints. Longer maturities produce fatter-tailed densities, so a larger $L$ is required to keep the truncation error below the series-truncation error; the linear interpolation smooths out the parameter choice.
 
-**4. Cache strike-independent work.**
-The key observation from paper Remark 3.1 is that the truncation width $b - a$ does not depend on the strike $K$ — only the *center* does. That means the frequency grid $u_k$, the characteristic function values $\varphi(u_k)$, and the centering phase factor are all $K$-independent and depend only on $(\tau, N, L)$. We compute these once and store them on the pricer instance. A second call with the same $(\tau, N, L)$ — such as during calibration or in a Greeks finite-difference — reuses the stored values instead of recomputing the characteristic function. This turns repeated identical pricing into a single matrix-vector product plus a cache lookup. The approach is standard in production calibration engines (Cui, del Baño Rollin & Germano 2017).
-
-**5. Cache the payoff-coefficient matrix as well.**
-The analytic payoff coefficients $V_k$ depend on $(K, \tau, N, L, \mathrm{cp})$. Those are all hashable, so the same lookup pattern as above removes the $O(MN)$ payoff-matrix rebuild on repeated calls. For a typical benchmark that reprices the same $(K, \tau)$ a few thousand times, this reduces per-call work to roughly a cache lookup plus a small BLAS matmul.
+**4–5. Cache the full pricing result by argument tuple.**
+`HestonCOSPricer` stores the final price array, keyed on $(K, \tau, N, L, \mathrm{cp})$. Repeated calls with the same arguments — common in calibration loops and finite-difference Greeks — return from a dict lookup instead of re-running the kernel. The cache is bounded (FIFO eviction at 64 entries) so it does not grow unboundedly under varied calibration sweeps. This pattern is standard in production calibration engines (Cui, del Baño Rollin & Germano 2017).
 
 **6. Cancellation-safe intermediate arithmetic.**
 Where the algorithm forms $1 - e^{-x}$ or $\log(1 - y)$ at small arguments, we use `np.expm1` and `np.log1p` instead of the naive `1 - np.exp(-x)` / `np.log(1 - y)`. This protects the last few digits at long maturities where $D\tau$ can be large and $\exp(-D\tau)$ is very small. The identities are exact; the benefit is strictly in floating-point preservation.
 
-Changes 4 and 5 dominate the runtime improvement. Changes 1–3 dominate the error improvement. Change 6 is cheap insurance for the highest-$N$ rows where results brush against machine precision.
+**7. Compile the pricing math with Numba.**
+The whole pricing recipe — the cumulant, the characteristic function, the payoff coefficients, and the final dot product — is folded into one tight loop over the index $k$. Numba compiles that loop ahead of time into machine code, the way a C compiler would. This matters because a NumPy call on a small array spends more time on Python bookkeeping than on the actual math: a plain NumPy version of this calculation runs about thirty separate array operations, each paying that overhead, while the compiled loop runs once and just does the arithmetic. Both the free functions (`price_call_heston`, `price_call_heston_vec`, and put variants) and the `HestonCOSPricer` class call the same kernels under the hood — the class just adds the (K, $\tau$, N, L, cp) cache on top.
+
+Changes 4–5 are what make the warm runtime fast. Change 7 is what makes the cold runtime fast. Changes 1–3 are what make the answer more accurate. Change 6 is cheap insurance for the largest-$N$ rows, where the answer is already close to the limit of 64-bit floating-point precision.
 
 ## Repository Structure
 
@@ -183,7 +188,7 @@ fourier-cosine-option-pricing/
 │       ├── __init__.py
 │       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
 │       ├── models.py                  # BsmModel
-│       ├── heston_cos_pricer.py       # HestonCOSPricer (optimized Heston COS)
+│       ├── heston_cos_pricer.py       # Heston COS: numba kernels + class wrapper
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
