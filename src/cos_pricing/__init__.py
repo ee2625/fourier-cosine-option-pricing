@@ -19,16 +19,25 @@ from .heston_cos_pricer import (
     price_call_heston_vec,
     price_put_heston_vec,
 )
+from .models import BsmModel, NormalCos
+from .heston_cos_pricer import HestonCOSPricer
+from .vg_model import VgModel
+from .carr_madan import carr_madan_price
 from .utils import bsm_price, bsm_impvol, convergence_table, benchmark_runtime
+from .cgmy_model import CgmyModel
 
 __all__ = [
     "cos_price",
     "BsmModel",
+    "NormalCos",
     "HestonCOSPricer",
     "price_call_heston",
     "price_put_heston",
     "price_call_heston_vec",
     "price_put_heston_vec",
+    "VgModel",
+    "CgmyModel",
+    "carr_madan_price",
     "bsm_price",
     "bsm_impvol",
     "convergence_table",
