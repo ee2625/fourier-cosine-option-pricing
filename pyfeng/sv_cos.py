@@ -248,35 +248,42 @@ class HestonCos(heston.HestonABC, CosABC):
         - Heston SL (1993) Rev. Financial Studies 6:327-343.
         - Lord R, Kahl C (2010) Mathematical Finance 20:671-694.
         - Fang F, Oosterlee CW (2008) SIAM J. Sci. Comput. 31:826-848.
+
+    Changes from initial draft:
+        - mgf_logprice aligned with HestonFft (same variable names, Lord & Kahl 2010)
+        - _cumulants c1 now uses self.avgvar_mv() from HestonABC instead of manual formula
     """
 
     def mgf_logprice(self, uu, texp):
         """
         Heston log-price MGF – Lord & Kahl (2010) branch-cut-safe formulation.
-        Handles both real and complex *uu*.
+        Matches HestonFft.mgf_logprice exactly (same variable names and style).
+
+        References:
+            - Lord R, Kahl C (2010) Complex Logarithms in Heston-Like Models.
+              Mathematical Finance 20:671-694.
         """
         var_0 = self.sigma
-        vov2  = self.vov**2
-        beta  = self.mr - self.vov * self.rho * uu
-        dd    = np.sqrt(beta**2 + vov2 * uu * (1.0 - uu))
-        gg    = (beta - dd) / (beta + dd)
-        exp_t = np.exp(-dd * texp)
-        tmp1  = 1.0 - gg * exp_t
-        logval = (
-            self.mr * self.theta
-            * ((beta - dd) * texp - 2.0 * np.log(tmp1 / (1.0 - gg)))
-            + var_0 * (beta - dd) * (1.0 - exp_t) / tmp1
-        )
-        return np.exp(logval / vov2)
+        vov2 = self.vov**2
+
+        beta = self.mr - self.vov*self.rho*uu
+        dd = np.sqrt(beta**2 + vov2*uu*(1 - uu))
+        gg = (beta - dd)/(beta + dd)
+        exp = np.exp(-dd*texp)
+        tmp1 = 1 - gg*exp
+
+        mgf = self.mr*self.theta*((beta - dd)*texp - 2*np.log(tmp1/(1 - gg))) + var_0*(beta - dd)*(1 - exp)/tmp1
+        return np.exp(mgf/vov2)
 
     def _cumulants(self, texp):
         """
         Analytic cumulants of log(S_T/F) for the Heston model.
 
-        c1 is exact.  c2 follows Appendix A, Eq. (A.2) of Fang &
-        Oosterlee (2008).  c4 is set to zero per their Section 5
-        recommendation, keeping [a, b] well-conditioned for typical
-        calibrated parameters.
+        c1 uses HestonABC.avgvar_mv (Ball & Roma 1994 Appendix B).
+        c2 follows Appendix A, Eq. (A.2) of Fang & Oosterlee (2008)
+        and includes the rho term (avgvar_mv does not cover this).
+        c4 is set to zero per their Section 5 recommendation, keeping
+        [a, b] well-conditioned for typical calibrated parameters.
 
         Returns:
             (c1, c2, 0.0, 0.0)
@@ -287,11 +294,11 @@ class HestonCos(heston.HestonABC, CosABC):
         v0  = self.sigma
         T   = texp
 
+        # c1: -1/2 * E[integrated variance] — uses HestonABC helper
+        c1 = -0.5 * texp * self.avgvar_mv(texp)[0]
+
         eT  = np.exp(-kap * T)
         e2T = np.exp(-2.0 * kap * T)
-
-        # Exact mean
-        c1 = -0.5 * (lam * T + (v0 - lam) * (1.0 - eT) / kap)
 
         # Appendix A, Eq. (A.2)
         c2 = (1.0 / (8.0 * kap**3)) * (
