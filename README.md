@@ -175,11 +175,12 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 
 ### Test suite
 
-**84/84 tests pass** covering:
+**112/112 tests pass** covering:
 - BSM (`test_cos_method.py`) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases
 - Heston (`test_heston_cos_pricer.py`) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation
 - Variance Gamma (`test_vg_model.py`) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery
 - **Dimensional invariance (`test_dimensional_invariance.py`, `test_buckingham_pi.py`)** — BSM scale invariance and Bachelier translation invariance at the 1e-10 tolerance; parametrised Buckingham π test over `{BsmModel, HestonCOSPricer, NormalCos}`
+- **Heston temporal invariance (`test_heston_temporal_invariance.py`)** — 7-parameter temporal π-symmetry and joint spatial-temporal invariance, both at machine epsilon
 
 ## Implementation
 
@@ -275,7 +276,8 @@ fourier-cosine-option-pricing/
 │   ├── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 │   ├── test_vg_model.py               # Variance Gamma: CF, cumulants, convergence
 │   ├── test_dimensional_invariance.py # BSM scale + NormalCos translation
-│   └── test_buckingham_pi.py          # parametrised across all model classes
+│   ├── test_buckingham_pi.py          # parametrised across all model classes
+│   └── test_heston_temporal_invariance.py # Heston temporal + spatial-temporal π-symmetries
 ├── examples/
 │   ├── example_european_option.py     # full demo: BSM + Heston + IV smile
 │   ├── heston_tables.py               # Heston demo: convergence + sensitivity
@@ -290,13 +292,15 @@ fourier-cosine-option-pricing/
 │   ├── table9.py                      # Table 9: CGMY Y=1.5
 │   ├── table10.py                     # Table 10: CGMY Y=1.98
 │   ├── validate_normal_cos.py         # Bachelier COS vs closed-form
-│   └── dimensionless_surface.py       # π-group collapse + BSM vs Bachelier overlay
+│   ├── dimensionless_surface.py       # π-group collapse + BSM vs Bachelier overlay
+│   └── heston_dimensionless_surface.py # Heston π-group collapse, 8-D → 2-D slice
 ├── pyfeng/
 │   └── sv_cos.py                      # PyFENG-compatible port of the Heston COS pricer
 └── docs/
     ├── paper_notes.md
     ├── fig_bsm_collapse.png           # dimensionless collapse surface
-    └── fig_bsm_vs_bachelier.png       # BSM vs Bachelier π-plane comparison
+    ├── fig_bsm_vs_bachelier.png       # BSM vs Bachelier π-plane comparison
+    └── fig_heston_collapse.png        # Heston dimensionless slice collapse
 ```
 
 ## Installation
@@ -367,8 +371,9 @@ PYTHONPATH=src python examples/example_european_option.py
 # Dimensional-analysis extension: Bachelier validation and surface plots
 PYTHONPATH=src python examples/validate_normal_cos.py
 PYTHONPATH=src python examples/dimensionless_surface.py     # writes docs/*.png
+PYTHONPATH=src python examples/heston_dimensionless_surface.py  # writes docs/fig_heston_collapse.png
 
-# Run all tests (84 total)
+# Run all tests (112 total)
 python -m pytest tests/ -v
 ```
 
@@ -407,6 +412,10 @@ Scaling spot and strike by the same factor leaves $C/S_0$ unchanged. The same id
 $$C_n(F + \lambda,\, K + \lambda,\, \sigma_n,\, T) \;=\; C_n(F,\, K,\, \sigma_n,\, T).$$
 Shifting forward and strike by the same additive constant leaves the price unchanged. `NormalCos` uses $K - F$ as its only strike-related input, so the shift is bit-identical on the kernel inputs.
 
+**Heston — temporal scale invariance.** Variance, mean-reversion, vol-of-vol, and the interest rates all share the dimension $T^{-1}$, so they combine with maturity into dimensionless products. Stretching $T$ by $\mu$ while shrinking every rate-dimensioned input by $1/\mu$ leaves the price unchanged:
+$$C(T,\, r,\, q,\, \kappa,\, \eta,\, v_0,\, \bar v) \;=\; C(\mu T,\, r/\mu,\, q/\mu,\, \kappa/\mu,\, \eta/\mu,\, v_0/\mu,\, \bar v/\mu),$$
+with $\rho$, $S_0$, $K$ unchanged. Seven parameters rotate at once. The change of variable $\tau' = t/\mu$ in the Heston SDEs, combined with Brownian rescaling, returns the original system in $\tau'$-time, so $\log(S_T/S_0)$ has the same law under both parameterisations. The discount factor $e^{-rT} = e^{-(r/\mu)(\mu T)}$ is invariant by the same identity. Heston's full π-basis has 8 independent groups — $K/S_0,\ (r-q)T,\ \kappa T,\ v_0 T,\ \bar v T,\ \eta T,\ \rho$ — versus BSM's 3, so there are five additional symmetries beyond the spatial scaling above; the temporal rotation exercises seven of these eight at once.
+
 ### Empirical verification
 
 Both symmetries are tested at tolerance $10^{-10}$ in `tests/test_dimensional_invariance.py` (model-specific, covering negative shifts and $r \ne q$) and in `tests/test_buckingham_pi.py` (parametrised over all model classes at $r = q = 0$). Observed errors are below one machine epsilon.
@@ -438,6 +447,18 @@ Both symmetries are tested at tolerance $10^{-10}$ in `tests/test_dimensional_in
 
 The non-zero cells are single-ulp discrepancies in the `F = S·exp((r-q)T)` carry factor; they vanish entirely when $r = q$.
 
+**Heston temporal invariance** — $\max\left|C_\text{rescaled} - C_\text{base}\right|/S_0$ over $K \in \{70, 85, 100, 115, 130\}$, $T = 1$ before scaling:
+
+| $\mu$ | call | put |
+|---|---|---|
+| 0.1   | 4.30e-12 | 3.55e-17 |
+| 0.5   | 0        | 0        |
+| 2.0   | 0        | 0        |
+| 10    | 4.63e-13 | 7.11e-17 |
+| 100   | 6.62e-12 | 7.11e-17 |
+
+The same file (`tests/test_heston_temporal_invariance.py`) also verifies the joint spatial-temporal symmetry $C(\alpha S_0, \alpha K, \mu T, \dots) / (\alpha S_0) = C(S_0, K, T, \dots) / S_0$ — worst error $4.6 \times 10^{-13}$ across 18 $(\alpha, \mu)$ combinations.
+
 ### Dimensionless price surface
 
 For BSM with $r = q = 0$, the dimensionless surface $C/S_0 = f(K/S_0,\, \sigma\sqrt{T})$ captures the model in two variables. Any choice of raw inputs $(S_0, \sigma, T)$ lands on this single surface:
@@ -453,6 +474,14 @@ With the small-move calibration $\sigma_n = S_0 \sigma$, the two dimensionless s
 ![BSM vs Bachelier](docs/fig_bsm_vs_bachelier.png)
 
 Absolute gap shrinks from $\approx 5\times 10^{-2}$ in the corners (deep OTM/ITM with high vol) to $\approx 3\times 10^{-3}$ near ATM. This is the graphical version of the classical "Bachelier approximates BSM for small log-returns," recast as an inequality between two dimensionless surfaces.
+
+### Heston dimensionless surface
+
+The same collapse story extends to Heston, with one extra dimension's worth of choices to fix. Holding six π-groups constant ($\rho = -0.7$, $\kappa T = 1.5$, $\bar v T = 0.04$, $\eta T = 0.4$, $(r-q)T = 0$) and sweeping the other two — moneyness $K/S_0$ and the BSM-equivalent vol $\sqrt{v_0 T}$ — gives a 2-D slice of the 8-D price surface:
+
+![Heston collapse](docs/fig_heston_collapse.png)
+
+Three sextets at $\sqrt{v_0 T} = 0.4$ realising the same six fixed groups — $(S_0=50, T=2, v_0=0.08, \kappa=0.75, \eta=0.2, \bar v=0.02)$, $(S_0=250, T=0.25, v_0=0.64, \kappa=6.0, \eta=1.6, \bar v=0.16)$, $(S_0=1000, T=4, v_0=0.04, \kappa=0.375, \eta=0.1, \bar v=0.01)$ — span a 16× range of raw $v_0$, $\kappa$, $\eta$, $\bar v$ and yet agree on $C/S_0$ to **~4e-19** at every moneyness in $\{0.7, 1.0, 1.3, 1.6\}$. The agreement is sub-machine-epsilon because pinning the truncation half-width forces the COS evaluations to be bit-identical, not merely numerically close.
 
 ## References
 
