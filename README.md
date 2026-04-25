@@ -19,7 +19,7 @@ The focus is on:
 - Reproduction of key tables from the paper
 - Comparison with the Carr-Madan FFT method
 - Computational efficiency (accuracy vs. $N$, runtime scaling)
-- **Extension: Bachelier (normal) model pricer and dimensional-analysis invariance tests**
+- **Extension: dimensional-analysis (Buckingham $\pi$) symmetries for the four paper models — BSM, Heston, VG, CGMY**
 
 ## Key Results
 
@@ -175,12 +175,12 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 
 ### Test suite
 
-**112/112 tests pass** covering:
+**142/142 tests pass** covering:
 - BSM (`test_cos_method.py`) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases
 - Heston (`test_heston_cos_pricer.py`) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation
 - Variance Gamma (`test_vg_model.py`) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery
-- **Dimensional invariance (`test_dimensional_invariance.py`, `test_buckingham_pi.py`)** — BSM scale invariance and Bachelier translation invariance at the 1e-10 tolerance; parametrised Buckingham π test over `{BsmModel, HestonCOSPricer, NormalCos}`
-- **Heston temporal invariance (`test_heston_temporal_invariance.py`)** — 7-parameter temporal π-symmetry and joint spatial-temporal invariance, both at machine epsilon
+- **Spatial scale invariance (`test_dimensional_invariance.py`, `test_buckingham_pi.py`)** — $C(\lambda S, \lambda K) = \lambda\, C(S, K)$ for `{BsmModel, HestonCOSPricer, VgModel, CgmyModel}` at the 1e-10 tolerance; parametrised Buckingham π test extends automatically to any new exponential-Lévy model
+- **Temporal rate invariance (`test_dimensional_invariance.py`, `test_heston_temporal_invariance.py`)** — VG ($T \to \mu T,\ \nu \to \mu\nu,\ \theta \to \theta/\mu,\ \sigma \to \sigma/\sqrt\mu$), CGMY ($T \to \mu T,\ C \to C/\mu$), and Heston (7-parameter rotation) all hold at machine epsilon
 
 ## Implementation
 
@@ -265,7 +265,7 @@ fourier-cosine-option-pricing/
 │   └── cos_pricing/
 │       ├── __init__.py
 │       ├── cos_method.py              # core COS engine (model-agnostic, BSM)
-│       ├── models.py                  # BsmModel + NormalCos (Bachelier)
+│       ├── models.py                  # BsmModel
 │       ├── heston_cos_pricer.py       # Heston COS: numba kernels + class wrapper
 │       ├── vg_model.py                # VgModel (Variance Gamma, COS + cumulants)
 │       ├── cgmy_model.py              # CgmyModel (CGMY infinite-activity Lévy)
@@ -275,8 +275,8 @@ fourier-cosine-option-pricing/
 │   ├── test_cos_method.py             # BSM + generic COS engine
 │   ├── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 │   ├── test_vg_model.py               # Variance Gamma: CF, cumulants, convergence
-│   ├── test_dimensional_invariance.py # BSM scale + NormalCos translation
-│   ├── test_buckingham_pi.py          # parametrised across all model classes
+│   ├── test_dimensional_invariance.py # BSM/Heston/VG/CGMY scale + VG/CGMY temporal
+│   ├── test_buckingham_pi.py          # parametrised scale-invariance over all models
 │   └── test_heston_temporal_invariance.py # Heston temporal + spatial-temporal π-symmetries
 ├── examples/
 │   ├── example_european_option.py     # full demo: BSM + Heston + IV smile
@@ -291,15 +291,13 @@ fourier-cosine-option-pricing/
 │   ├── table8.py                      # Table 8: CGMY Y=0.5
 │   ├── table9.py                      # Table 9: CGMY Y=1.5
 │   ├── table10.py                     # Table 10: CGMY Y=1.98
-│   ├── validate_normal_cos.py         # Bachelier COS vs closed-form
-│   ├── dimensionless_surface.py       # π-group collapse + BSM vs Bachelier overlay
+│   ├── dimensionless_surface.py       # BSM π-group collapse plot
 │   └── heston_dimensionless_surface.py # Heston π-group collapse, 8-D → 2-D slice
 ├── pyfeng/
 │   └── sv_cos.py                      # PyFENG-compatible port of the Heston COS pricer
 └── docs/
     ├── paper_notes.md
-    ├── fig_bsm_collapse.png           # dimensionless collapse surface
-    ├── fig_bsm_vs_bachelier.png       # BSM vs Bachelier π-plane comparison
+    ├── fig_bsm_collapse.png           # BSM dimensionless collapse surface
     └── fig_heston_collapse.png        # Heston dimensionless slice collapse
 ```
 
@@ -315,7 +313,7 @@ pip install -r requirements.txt
 
 ```python
 import numpy as np
-from cos_pricing import BsmModel, HestonCOSPricer, NormalCos
+from cos_pricing import BsmModel, HestonCOSPricer, VgModel, CgmyModel
 
 # Black-Scholes-Merton
 m = BsmModel(sigma=0.2, intr=0.05, divr=0.1)
@@ -328,10 +326,13 @@ m = HestonCOSPricer(S0=100, v0=0.0175, lam=1.5768, eta=0.5751,
 m.price_call(100.0, tau=1.0)    # ~ 5.785155
 m.price_call(np.array([90, 95, 100, 105, 110]), tau=1.0)
 
-# Bachelier (arithmetic Brownian motion)
-m = NormalCos(sigma=25.0)        # absolute volatility in price units
+# Variance Gamma
+m = VgModel(sigma=0.12, theta=-0.14, nu=0.2, intr=0.1)
+m.price(90.0, spot=100.0, texp=1.0)    # ~ 19.0994
+
+# CGMY infinite-activity Lévy
+m = CgmyModel(C=1.0, G=5.0, M=5.0, Y=0.5, intr=0.1)
 m.price(100.0, spot=100.0, texp=1.0)
-# ~ 9.9736   (= sigma*sqrt(T)/sqrt(2*pi), the ATM closed form)
 ```
 
 ## Running the examples
@@ -368,12 +369,11 @@ PYTHONPATH=src python examples/heston_tables.py
 # Full demo (BSM accuracy, convergence, Heston, implied vol smile)
 PYTHONPATH=src python examples/example_european_option.py
 
-# Dimensional-analysis extension: Bachelier validation and surface plots
-PYTHONPATH=src python examples/validate_normal_cos.py
-PYTHONPATH=src python examples/dimensionless_surface.py     # writes docs/*.png
+# Dimensional-analysis extension: π-group collapse plots
+PYTHONPATH=src python examples/dimensionless_surface.py         # writes docs/fig_bsm_collapse.png
 PYTHONPATH=src python examples/heston_dimensionless_surface.py  # writes docs/fig_heston_collapse.png
 
-# Run all tests (112 total)
+# Run all tests (142 total)
 python -m pytest tests/ -v
 ```
 
@@ -383,71 +383,81 @@ A version of this implementation integrated into [PyFENG](https://github.com/PyF
 
 ## Dimensional Analysis and Buckingham π Symmetries
 
-The COS pricer — and any option-pricing method — is constrained by **dimensional analysis**. Buckingham's π theorem reduces BSM's five dimensional inputs $(S_0, K, r, \sigma, T)$ to three dimensionless groups $(K/S_0, \sigma\sqrt{T}, rT)$, and Bachelier's analogous inputs to two groups around $(K - F)/(\sigma_n\sqrt{T})$. The pricer uses exactly those groups internally, so the corresponding symmetries hold **by construction**, not by numerical luck.
+The COS pricer — and any option-pricing method — is constrained by **dimensional analysis**. Buckingham's π theorem rewrites each model's raw inputs as a smaller set of dimensionless groups; the pricer uses exactly those groups internally, so the corresponding symmetries hold **by construction**, not by numerical luck. The four exponential-Lévy models priced here — BSM, Heston, Variance Gamma, CGMY — are the same four exercised in the Fang & Oosterlee (2008) paper, and all share the same skeleton of symmetries.
 
 ### Why this matters in practice
 
 Three concrete uses beyond the π-group framing itself:
 
-**1. Correctness tests without analytic references.** If a pricer does not respect the symmetry its model predicts, something in the kernel is wrong. We verify $C(\lambda S, \lambda K) = \lambda\, C(S, K)$ for BSM and Heston, and $C_n(F+\lambda, K+\lambda) = C_n(F, K)$ for Bachelier — neither check needs a closed-form reference. This catches bugs for any model whose density lives in log-moneyness or price-offset coordinates, including models with no known analytic price. Heston invariance here holds to $3\times 10^{-18}$; that is structurally tighter than any comparison against a finite-precision analytic formula could be.
+**1. Correctness tests without analytic references.** If a pricer does not respect the symmetry its model predicts, something in the kernel is wrong. We verify $C(\lambda S, \lambda K) = \lambda\, C(S, K)$ for BSM, Heston, VG, and CGMY — none of which needs a closed-form reference. This catches bugs for any model whose density lives in log-moneyness, including models with no known analytic price. The temporal-rate identity is the same kind of structural check on the time-dimensioned parameters.
 
-**2. Calibration in dimensionless coordinates.** Because the price surface is a function of the π-groups only, calibration can be done once on $(K/S_0,\, \sigma\sqrt{T})$ instead of separately on every $(S_0, \sigma, T)$ triple. The collapse plot below is the direct visual of this: arbitrarily different raw-parameter combinations all map to the same two-dimensional surface.
+**2. Calibration in dimensionless coordinates.** Because the price surface is a function of the π-groups only, calibration can be done once on the dimensionless plane (e.g. $(K/S_0,\, \sigma\sqrt{T})$ for BSM, $(K/S_0,\, \sqrt{v_0 T},\, \rho,\, \kappa T,\, \bar v T,\, \eta T)$ for Heston) instead of separately on every $(S_0, \sigma, T)$ triple. The collapse plots below are the direct visual of this: arbitrarily different raw-parameter combinations all map to the same surface.
 
-**3. Meaningful model comparison.** "Is Bachelier close to BSM?" is an ill-posed question in raw parameters — the answer depends on which $(S_0, \sigma, T)$ is chosen. In π-coordinates the answer is specific: the surfaces differ by less than $3\times 10^{-3}$ near ATM at small $\sigma\sqrt{T}$, widening to ${\sim}\,5\times 10^{-2}$ at the corners. The gap heatmap turns the informal claim "Bachelier approximates BSM for small moves" into a precise inequality on the dimensionless plane.
+**3. Sanity check across maturities.** Temporal rate invariance pins down a one-parameter family of equivalent calibrations: stretching $T$ by $\mu$ and contracting every inverse-time parameter by $1/\mu$ produces the same price. A pricer that breaks this identity is using $T$ in some place where the model says it should only appear inside a dimensionless product.
 
 ### π-groups
 
-| Model | Price group | Moneyness group | Vol / rate group |
-|---|---|---|---|
-| BSM (lognormal) | $C / S_0$ | $K / S_0$ | $\sigma\sqrt{T}$,  $rT$ |
-| Bachelier (normal) | $C_n / (\sigma_n\sqrt{T})$ | $(K - F) / (\sigma_n\sqrt{T})$ | — |
+| Model | Spatial group | Inverse-time groups |
+|---|---|---|
+| BSM | $K / S_0$ | $\sigma\sqrt{T},\ rT,\ qT$ |
+| Heston | $K / S_0$ | $\kappa T,\ v_0 T,\ \bar v T,\ \eta T,\ rT,\ qT$ (plus $\rho$, dimensionless) |
+| VG | $K / S_0$ | $\sigma\sqrt{T},\ \theta T,\ T/\nu,\ rT,\ qT$ |
+| CGMY | $K / S_0$ | $CT,\ rT,\ qT$ (plus $G$, $M$, $Y$, dimensionless) |
+
+The price itself is reported as $C/S_0$, which is the dimensionless price-group common to all four models.
 
 ### Symmetries
 
-**BSM — scale invariance.** Price is homogeneous of degree 1 in $(S_0, K)$:
-$$C(\lambda S_0,\, \lambda K,\, \sigma,\, T) \;=\; \lambda \cdot C(S_0,\, K,\, \sigma,\, T).$$
-Scaling spot and strike by the same factor leaves $C/S_0$ unchanged. The same identity holds for Heston, which is a lognormal-underlying model.
+**Spatial scale invariance — all four models.** Each one is an exponential-Lévy model ($S_T = S_0\, e^{X_T}$ with $X_T$ depending only on dimensionless or inverse-time parameters), so the price is homogeneous of degree 1 in $(S_0, K)$:
+$$C(\lambda S_0,\, \lambda K,\, \theta) \;=\; \lambda \cdot C(S_0,\, K,\, \theta), \qquad \theta = \text{model parameters}.$$
+Scaling spot and strike by the same factor leaves $K/S_0$ — and therefore every part of the kernel — unchanged.
 
-**Bachelier — translation invariance.** Price depends on $(F, K)$ only through $K - F$:
-$$C_n(F + \lambda,\, K + \lambda,\, \sigma_n,\, T) \;=\; C_n(F,\, K,\, \sigma_n,\, T).$$
-Shifting forward and strike by the same additive constant leaves the price unchanged. `NormalCos` uses $K - F$ as its only strike-related input, so the shift is bit-identical on the kernel inputs.
+**Temporal rate invariance — Heston, VG, CGMY.** Every parameter that carries units of $T^{-1}$ combines with maturity into a dimensionless product. Stretching $T \to \mu T$ and contracting each inverse-time parameter by $1/\mu$ leaves all π-groups unchanged, so the price is invariant.
 
-**Heston — temporal scale invariance.** Variance, mean-reversion, vol-of-vol, and the interest rates all share the dimension $T^{-1}$, so they combine with maturity into dimensionless products. Stretching $T$ by $\mu$ while shrinking every rate-dimensioned input by $1/\mu$ leaves the price unchanged:
-$$C(T,\, r,\, q,\, \kappa,\, \eta,\, v_0,\, \bar v) \;=\; C(\mu T,\, r/\mu,\, q/\mu,\, \kappa/\mu,\, \eta/\mu,\, v_0/\mu,\, \bar v/\mu),$$
-with $\rho$, $S_0$, $K$ unchanged. Seven parameters rotate at once. The change of variable $\tau' = t/\mu$ in the Heston SDEs, combined with Brownian rescaling, returns the original system in $\tau'$-time, so $\log(S_T/S_0)$ has the same law under both parameterisations. The discount factor $e^{-rT} = e^{-(r/\mu)(\mu T)}$ is invariant by the same identity. Heston's full π-basis has 8 independent groups — $K/S_0,\ (r-q)T,\ \kappa T,\ v_0 T,\ \bar v T,\ \eta T,\ \rho$ — versus BSM's 3, so there are five additional symmetries beyond the spatial scaling above; the temporal rotation exercises seven of these eight at once.
+- **Heston** — variance, mean-reversion, vol-of-vol, and rates all rescale together:
+  $$C(T,\, r,\, q,\, \kappa,\, \eta,\, v_0,\, \bar v) \;=\; C(\mu T,\, r/\mu,\, q/\mu,\, \kappa/\mu,\, \eta/\mu,\, v_0/\mu,\, \bar v/\mu),$$
+  with $\rho$, $S_0$, $K$ unchanged. Seven parameters rotate at once.
+- **VG** — $\nu$ has units of time and $\theta,\ \sigma^2$ have units of $T^{-1}$:
+  $$C(T,\, \sigma,\, \theta,\, \nu,\, r,\, q) \;=\; C(\mu T,\, \sigma/\sqrt{\mu},\, \theta/\mu,\, \mu\nu,\, r/\mu,\, q/\mu).$$
+  Verifies that $\nu\theta$, $\nu\sigma^2$, $T/\nu$, $wT$, $rT$ — every combination that appears inside the VG characteristic function — are preserved.
+- **CGMY** — $C$ has units of $T^{-1}$; $G$, $M$, $Y$ are dimensionless jump-shape parameters:
+  $$C(T,\, C,\, G,\, M,\, Y,\, r,\, q) \;=\; C(\mu T,\, C/\mu,\, G,\, M,\, Y,\, r/\mu,\, q/\mu).$$
 
 ### Empirical verification
 
-Both symmetries are tested at tolerance $10^{-10}$ in `tests/test_dimensional_invariance.py` (model-specific, covering negative shifts and $r \ne q$) and in `tests/test_buckingham_pi.py` (parametrised over all model classes at $r = q = 0$). Observed errors are below one machine epsilon.
+All symmetries are tested at tolerance $10^{-10}$ in `tests/test_dimensional_invariance.py` and `tests/test_buckingham_pi.py` (parametrised across all four model classes). Observed errors are below one machine epsilon in every cell.
 
-**BSM scale invariance** — $\max\left|C(\lambda S, \lambda K)/(\lambda S) - C(S, K)/S\right|$ over $T \in \{0.1, 1, 5\}$, $K \in \{70, 85, 100, 115, 130\}$:
+**Spatial scale invariance** — $\max\left|C(\lambda S, \lambda K)/(\lambda S) - C(S, K)/S\right|$ over $T \in \{0.1, 1, 5\}$, $K \in \{70, 85, 100, 115, 130\}$, $r,\,q \ne 0$:
 
-| $\lambda$ | call | put |
+| $\lambda$ | BSM call | BSM put | Heston call | Heston put | VG call | VG put | CGMY call | CGMY put |
+|---|---|---|---|---|---|---|---|---|
+| 0.1 | 1.67e-16 | 1.80e-16 | 1.11e-16 | 5.55e-17 | 4.68e-16 | 1.25e-16 | 3.68e-16 | 1.11e-16 |
+| 0.5 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 2.0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 10  | 1.94e-16 | 2.22e-16 | 5.55e-17 | 5.55e-17 | 4.68e-16 | 3.89e-16 | 3.68e-16 | 1.11e-16 |
+| 100 | 2.22e-16 | 1.94e-16 | 1.11e-16 | 5.55e-17 | 9.16e-16 | 2.78e-16 | 3.69e-16 | 6.77e-17 |
+
+The non-zero cells are single-ulp discrepancies in the $F = S\,e^{(r-q)T}$ carry factor; they vanish entirely when $r = q$.
+
+**VG temporal invariance** — $\max\left|C_\text{rescaled} - C_\text{base}\right|/S_0$ over $K \in \{70, 85, 100, 115, 130\}$, $T = 1$ before scaling:
+
+| $\mu$ | call | put |
 |---|---|---|
-| 0.1   | 5.55e-17 | 1.80e-16 |
-| 0.5   | 0        | 0        |
-| 1.0   | 0        | 0        |
-| 2.0   | 0        | 0        |
-| 10    | 1.11e-16 | 2.78e-16 |
-| 100   | 5.55e-17 | 2.50e-16 |
+| 0.1 | 3.55e-17 | 4.44e-18 |
+| 0.5 | 1.33e-17 | 1.11e-18 |
+| 2.0 | 1.33e-17 | 1.11e-18 |
+| 10  | 3.55e-17 | 8.88e-18 |
 
-**Bachelier translation invariance** — $\max\left|C_n(F+\lambda, K+\lambda) - C_n(F, K)\right|$:
+**CGMY temporal invariance** — same setup; CGMY's rescaling is bit-identical because only $C$ and the rates change (no $\sqrt{\mu}$ correction):
 
-| $\lambda$ | call | put |
+| $\mu$ | call | put |
 |---|---|---|
-| −30 | 2.49e-14 | 2.13e-14 |
-| −5  | 0        | 0        |
-| 0.5 | 0        | 0        |
-| 1.0 | 0        | 0        |
-| 2.0 | 2.49e-14 | 2.13e-14 |
-| 10  | 2.49e-14 | 2.13e-14 |
-| 100 | 2.49e-14 | 3.55e-14 |
+| 0.1 | 0 | 0 |
+| 0.5 | 0 | 0 |
+| 2.0 | 0 | 0 |
+| 10  | 0 | 0 |
 
-**Heston scale invariance** — same test as BSM, over $\lambda \in \{0.1, 0.5, 2, 10, 100\}$: max error **3.47e-18**, mean **2.02e-19**. Heston inherits BSM's scale invariance because its kernel is written in log-moneyness.
-
-The non-zero cells are single-ulp discrepancies in the `F = S·exp((r-q)T)` carry factor; they vanish entirely when $r = q$.
-
-**Heston temporal invariance** — $\max\left|C_\text{rescaled} - C_\text{base}\right|/S_0$ over $K \in \{70, 85, 100, 115, 130\}$, $T = 1$ before scaling:
+**Heston temporal invariance** — same setup, 7-parameter rotation:
 
 | $\mu$ | call | put |
 |---|---|---|
@@ -457,7 +467,7 @@ The non-zero cells are single-ulp discrepancies in the `F = S·exp((r-q)T)` carr
 | 10    | 4.63e-13 | 7.11e-17 |
 | 100   | 6.62e-12 | 7.11e-17 |
 
-The same file (`tests/test_heston_temporal_invariance.py`) also verifies the joint spatial-temporal symmetry $C(\alpha S_0, \alpha K, \mu T, \dots) / (\alpha S_0) = C(S_0, K, T, \dots) / S_0$ — worst error $4.6 \times 10^{-13}$ across 18 $(\alpha, \mu)$ combinations.
+`tests/test_heston_temporal_invariance.py` also verifies the joint spatial-temporal symmetry $C(\alpha S_0, \alpha K, \mu T, \dots) / (\alpha S_0) = C(S_0, K, T, \dots) / S_0$ — worst error $4.6 \times 10^{-13}$ across 18 $(\alpha, \mu)$ combinations.
 
 ### Dimensionless price surface
 
@@ -466,14 +476,6 @@ For BSM with $r = q = 0$, the dimensionless surface $C/S_0 = f(K/S_0,\, \sigma\s
 ![BSM collapse](docs/fig_bsm_collapse.png)
 
 Three triples with very different raw parameters — $(S_0=50, T=2, \sigma=0.283)$, $(S_0=250, T=0.25, \sigma=0.800)$, $(S_0=1000, T=4, \sigma=0.200)$, all producing $\sigma\sqrt{T}=0.4$ — agree to **~1e-14** at every moneyness in $\{0.7,\, 1.0,\, 1.3,\, 1.6\}$.
-
-### BSM vs Bachelier on the π-plane
-
-With the small-move calibration $\sigma_n = S_0 \sigma$, the two dimensionless surfaces coincide near ATM and at small $\sigma\sqrt{T}$:
-
-![BSM vs Bachelier](docs/fig_bsm_vs_bachelier.png)
-
-Absolute gap shrinks from $\approx 5\times 10^{-2}$ in the corners (deep OTM/ITM with high vol) to $\approx 3\times 10^{-3}$ near ATM. This is the graphical version of the classical "Bachelier approximates BSM for small log-returns," recast as an inequality between two dimensionless surfaces.
 
 ### Heston dimensionless surface
 

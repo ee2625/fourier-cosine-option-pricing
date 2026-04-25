@@ -1,119 +1,168 @@
 """
-Track A — Dimensional invariance tests (Buckingham pi symmetries).
+Dimensional invariance tests (Buckingham pi symmetries) for the four
+exponential-Levy models priced in this package: BSM, Heston, VG, CGMY.
 
-These tests are model-independent: they do not require an analytic
-reference value.  They assert the symmetry groups predicted by
-dimensional analysis hold for the COS pricer:
+Two symmetry families are exercised:
 
-    BsmModel   — scale invariance:         C(lambda*S, lambda*K) = lambda * C(S, K)
-    NormalCos  — translation invariance:   C(F + lambda, K + lambda) = C(F, K)
+1. **Spatial scale invariance** — common to every exponential-Levy model:
+       C(lambda * S, lambda * K) == lambda * C(S, K)
+   The kernel lives in log-moneyness x = log(S / K), so scaling spot and
+   strike by a common factor leaves x unchanged. Holds at machine epsilon.
 
-See: MATH5030 Lecture 3 (Cases 4 and 5), Buckingham pi theorem.
+2. **Temporal rate invariance** — for any model whose parameters carry
+   units of inverse-time (rates and intensities), stretching maturity by
+   ``mu`` while contracting those parameters by 1/mu leaves the price
+   unchanged. The dimensionless pi-groups (e.g. r*T, kappa*T, sigma*sqrt(T),
+   T/nu, C*T) absorb the change, so the kernel sees the same numbers.
+
+Reference: Fang & Oosterlee (2008) — the four models exercised here are
+BSM (Section 5.1), Heston (5.2), CGMY (5.3), VG (5.4).
 """
 import sys, os
-# Support  `pytest tests/`  from repo root even without PYTHONPATH=src set.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
 import pytest
 
-from cos_pricing import BsmModel, NormalCos
+from cos_pricing import BsmModel, HestonCOSPricer, VgModel, CgmyModel
 
 
-# Fixed lambda grid from team_tasks.docx (Track A spec):
 LAMBDAS = [0.1, 0.5, 2.0, 10.0, 100.0]
-
-# Coverage: multiple strikes (ITM / ATM / OTM) and multiple maturities.
 SPOT    = 100.0
 STRIKES = np.array([70.0, 85.0, 100.0, 115.0, 130.0])
 TEXPS   = [0.1, 1.0, 5.0]
-
-TOL = 1e-10          # "10 decimal places" per task plan
+TOL     = 1e-10
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# BSM scale invariance:  C(lambda*S, lambda*K) = lambda * C(S, K)
+# Spatial scale invariance:  C(lambda*S, lambda*K) = lambda * C(S, K)
 # ─────────────────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("lam", LAMBDAS)
 @pytest.mark.parametrize("cp, label", [(+1, "call"), (-1, "put")])
 def test_scale_invariance_bsm(lam, cp, label):
-    """
-    BSM price is homogeneous of degree 1 in (S, K):
-        C(lambda*S, lambda*K, sigma, T) = lambda * C(S, K, sigma, T).
-
-    This reflects the dimensional structure: BSM has only 3 independent
-    dimensionless pi-groups (K/S, sigma*sqrt(T), r*T).  Scaling S and K
-    by lambda leaves K/S unchanged, so C/S is unchanged, so C scales linearly.
-
-    Verified here for multiple (strike, maturity) pairs across each lambda.
-    Tolerance: absolute error on C/S below 1e-10.
-    """
+    """BSM is homogeneous of degree 1 in (S, K)."""
     model = BsmModel(sigma=0.25, intr=0.05, divr=0.02)
+    _assert_scale_invariance(
+        f"BSM/{label}", lam,
+        lambda S, K, T: model.price(K, S, T, cp=cp),
+    )
 
+
+@pytest.mark.parametrize("lam", LAMBDAS)
+@pytest.mark.parametrize("cp, label", [(+1, "call"), (-1, "put")])
+def test_scale_invariance_vg(lam, cp, label):
+    """VG is exponential-Levy: C(lambda*S, lambda*K) == lambda * C(S, K)."""
+    model = VgModel(sigma=0.12, theta=-0.14, nu=0.2, intr=0.05, divr=0.02)
+    _assert_scale_invariance(
+        f"VG/{label}", lam,
+        lambda S, K, T: model.price(K, S, T, cp=cp, n_cos=256),
+    )
+
+
+@pytest.mark.parametrize("lam", LAMBDAS)
+@pytest.mark.parametrize("cp, label", [(+1, "call"), (-1, "put")])
+def test_scale_invariance_cgmy(lam, cp, label):
+    """CGMY is exponential-Levy: C(lambda*S, lambda*K) == lambda * C(S, K)."""
+    model = CgmyModel(C=1.0, G=5.0, M=5.0, Y=0.5, intr=0.1, divr=0.02)
+    _assert_scale_invariance(
+        f"CGMY/{label}", lam,
+        lambda S, K, T: model.price(K, S, T, cp=cp, n_cos=256),
+    )
+
+
+def _assert_scale_invariance(name, lam, price_fn):
+    """Compare C/(lam*S) at lam-scaled spot/strike against C/S at the base."""
     worst = 0.0
     worst_where = None
     for texp in TEXPS:
-        base    = model.price(STRIKES,        SPOT,       texp, cp=cp)   # C(S, K)
-        scaled  = model.price(STRIKES * lam,  SPOT * lam, texp, cp=cp)   # C(lam*S, lam*K)
-        # Assert C/S is invariant: (scaled / (lam*S)) == (base / S), i.e.
-        # scaled == lam * base.  Form the ratio diff for scale-free tolerance.
-        err_vec = np.abs(scaled / SPOT / lam - base / SPOT)
-        k = int(np.argmax(err_vec))
-        if err_vec[k] > worst:
-            worst       = float(err_vec[k])
-            worst_where = (texp, float(STRIKES[k]), float(base[k]), float(scaled[k]))
-
+        base   = price_fn(SPOT,        STRIKES,        texp)
+        scaled = price_fn(SPOT * lam,  STRIKES * lam,  texp)
+        err = np.abs(scaled / SPOT / lam - base / SPOT)
+        k = int(np.argmax(err))
+        if float(err[k]) > worst:
+            worst       = float(err[k])
+            worst_where = (texp, float(STRIKES[k]),
+                           float(np.atleast_1d(base)[k]),
+                           float(np.atleast_1d(scaled)[k]))
     assert worst < TOL, (
-        f"BSM scale invariance violated for lambda={lam}, {label}: "
+        f"{name} scale invariance violated for lambda={lam}: "
         f"max |C(lam*S, lam*K)/(lam*S) - C(S, K)/S| = {worst:.2e} at "
-        f"(T={worst_where[0]}, K={worst_where[1]}); base={worst_where[2]:.10f}, "
-        f"scaled={worst_where[3]:.10f}"
+        f"(T={worst_where[0]}, K={worst_where[1]}); "
+        f"base={worst_where[2]:.10f}, scaled={worst_where[3]:.10f}"
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Bachelier translation invariance:  C(F + lambda, K + lambda) = C(F, K)
+# Temporal rate invariance — exponential-Levy models with time-dimensioned
+# parameters. Stretching T by mu and contracting rates/intensities by 1/mu
+# preserves every dimensionless pi-group, so the price is unchanged.
 # ─────────────────────────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("lam", LAMBDAS + [-5.0, -30.0])   # also test negative shifts
+MU_GRID = [0.1, 0.5, 2.0, 10.0]
+T_BASE  = 1.0
+TEMPORAL_TOL = 1e-10
+
+
+@pytest.mark.parametrize("mu", MU_GRID)
 @pytest.mark.parametrize("cp, label", [(+1, "call"), (-1, "put")])
-def test_translation_invariance_normal(lam, cp, label):
+def test_temporal_invariance_vg(mu, cp, label):
     """
-    Bachelier price depends on (F, K) only through the difference K - F:
-        C(F + lambda, K + lambda, sigma, T) = C(F, K, sigma, T).
+    VG temporal symmetry. Under T -> mu*T:
+        nu    -> mu * nu
+        theta -> theta / mu
+        sigma -> sigma / sqrt(mu)
+        r, q  -> r / mu, q / mu
 
-    This is a translation symmetry, not a scale symmetry — Bachelier's
-    dimensional pi-groups are (K - F)/(sigma*sqrt(T)) and Cn/(sigma*sqrt(T)),
-    both of which are invariant under a common shift of F and K.
-
-    Because NormalCos internally uses  k* = K - F  as its only strike
-    input, shifting both spot and strike by the same lambda feeds
-    bit-identical arguments into the COS kernel.  So this error should
-    be exactly 0, not merely below 1e-10.
+    Verifies that nu*theta, nu*sigma^2, w*T, T/nu, r*T, q*T are all
+    invariant — these are exactly the combinations that appear inside the
+    VG characteristic function.
     """
-    model = NormalCos(sigma=25.0, intr=0.05, divr=0.02)   # absolute vol, price units
+    sig_b, the_b, nu_b = 0.12, -0.14, 0.2
+    r_b, q_b           = 0.05, 0.02
 
-    worst = 0.0
-    worst_where = None
-    for texp in TEXPS:
-        # Under r != q, F = S*exp((r-q)T); shifting spot by lambda shifts F by
-        # lambda*exp((r-q)T), so we shift spot by lambda/exp((r-q)T) to get a
-        # forward shift of exactly lambda.
-        carry = np.exp((model.intr - model.divr) * texp)
-        spot_shift = lam / carry                          # keeps F shift equal to lam
+    base = VgModel(sigma=sig_b, theta=the_b, nu=nu_b, intr=r_b, divr=q_b)
+    scaled = VgModel(
+        sigma=sig_b / np.sqrt(mu),
+        theta=the_b / mu,
+        nu=nu_b * mu,
+        intr=r_b / mu,
+        divr=q_b / mu,
+    )
+    px_base   = base.price(STRIKES,   SPOT, T_BASE,      cp=cp, n_cos=256)
+    px_scaled = scaled.price(STRIKES, SPOT, T_BASE * mu, cp=cp, n_cos=256)
+    err = np.abs(px_scaled - px_base) / SPOT
+    worst = float(np.max(err))
+    assert worst < TEMPORAL_TOL, (
+        f"VG/{label} temporal invariance violated for mu={mu}: "
+        f"max |C(mu*T, scaled params) - C(T, base params)|/S = {worst:.2e}"
+    )
 
-        base    = model.price(STRIKES,       SPOT,              texp, cp=cp)
-        shifted = model.price(STRIKES + lam, SPOT + spot_shift, texp, cp=cp)
-        err_vec = np.abs(shifted - base)
-        k = int(np.argmax(err_vec))
-        if err_vec[k] > worst:
-            worst       = float(err_vec[k])
-            worst_where = (texp, float(STRIKES[k]), float(base[k]), float(shifted[k]))
 
-    assert worst < TOL, (
-        f"Bachelier translation invariance violated for lambda={lam}, {label}: "
-        f"max |C(F+lam, K+lam) - C(F, K)| = {worst:.2e} at "
-        f"(T={worst_where[0]}, K={worst_where[1]}); base={worst_where[2]:.10f}, "
-        f"shifted={worst_where[3]:.10f}"
+@pytest.mark.parametrize("mu", MU_GRID)
+@pytest.mark.parametrize("cp, label", [(+1, "call"), (-1, "put")])
+def test_temporal_invariance_cgmy(mu, cp, label):
+    """
+    CGMY temporal symmetry. Under T -> mu*T:
+        C    -> C / mu       (C carries units of 1/time)
+        r, q -> r / mu, q / mu
+        G, M, Y unchanged    (jump-size scales are dimensionless)
+
+    Verifies that C*T and r*T are invariant; G, M, Y are pure pi-groups.
+    """
+    C_b, G_b, M_b, Y_b = 1.0, 5.0, 5.0, 0.5
+    r_b, q_b           = 0.1, 0.02
+
+    base = CgmyModel(C=C_b, G=G_b, M=M_b, Y=Y_b, intr=r_b, divr=q_b)
+    scaled = CgmyModel(
+        C=C_b / mu, G=G_b, M=M_b, Y=Y_b,
+        intr=r_b / mu, divr=q_b / mu,
+    )
+    px_base   = base.price(STRIKES,   SPOT, T_BASE,      cp=cp, n_cos=256)
+    px_scaled = scaled.price(STRIKES, SPOT, T_BASE * mu, cp=cp, n_cos=256)
+    err = np.abs(px_scaled - px_base) / SPOT
+    worst = float(np.max(err))
+    assert worst < TEMPORAL_TOL, (
+        f"CGMY/{label} temporal invariance violated for mu={mu}: "
+        f"max |C(mu*T, scaled params) - C(T, base params)|/S = {worst:.2e}"
     )

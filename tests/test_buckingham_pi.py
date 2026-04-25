@@ -1,17 +1,17 @@
 """
-Track D — Parametrised Buckingham pi test across all model classes.
+Parametrised Buckingham pi test — verifies spatial scale invariance for
+every exponential-Levy model in this package.
 
-Each model class in this package has a characteristic dimensional symmetry:
+For each model class:
+    C(lambda*S, lambda*K) / (lambda*S)  ==  C(S, K) / S   (== C/S is a pi-group)
 
-    BsmModel, HestonCOSPricer   →  scale invariance       C(lam*S, lam*K) = lam * C(S, K)
-    NormalCos (Bachelier)       →  translation invariance C(F + lam, K + lam) = C(F, K)
+This holds because all four models live in log-moneyness coordinates
+x = log(S/K), so a common rescaling of spot and strike leaves x invariant.
+The test does not need analytic reference values, so it is a stronger
+cross-check than comparison against a closed form.
 
-This file verifies the appropriate symmetry for every model with one
-parametrised test.  Adding a new model class to PRICERS below
-automatically extends coverage — no new test code needed.
-
-Works without analytic reference values, so it's a stronger cross-check
-than comparison against closed-form prices.
+Adding a new exponential-Levy model class to PRICERS below automatically
+extends coverage — no new test code needed.
 """
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
@@ -19,16 +19,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import numpy as np
 import pytest
 
-from cos_pricing import BsmModel, NormalCos, HestonCOSPricer
+from cos_pricing import BsmModel, HestonCOSPricer, VgModel, CgmyModel
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Uniform pricer adapters.
-# All three use r = q = 0 so F = S, which makes "shift spot by lambda" equal
-# to "shift forward by lambda" — the condition under which Bachelier
-# translation invariance is a pure translation in spot coordinates.
-# (test_dimensional_invariance.py exercises the non-zero-rate case separately
-# using a carry-corrected spot shift.)
+# Uniform pricer adapters. r = q = 0 keeps the forward equal to the spot, so
+# scaling spot by lambda directly scales the forward by lambda.
+# (test_dimensional_invariance.py exercises non-zero rates separately.)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _bsm_price(spot, strike, texp, cp):
@@ -41,19 +38,24 @@ def _heston_price(spot, strike, texp, cp):
     return m.price_call(strike, tau=texp) if cp > 0 \
            else m.price_put(strike, tau=texp)
 
-def _normal_price(spot, strike, texp, cp):
-    return NormalCos(sigma=25.0).price(strike, spot, texp, cp=cp)
+def _vg_price(spot, strike, texp, cp):
+    return VgModel(sigma=0.12, theta=-0.14, nu=0.2).price(
+        strike, spot, texp, cp=cp, n_cos=256,
+    )
+
+def _cgmy_price(spot, strike, texp, cp):
+    return CgmyModel(C=1.0, G=5.0, M=5.0, Y=0.5).price(
+        strike, spot, texp, cp=cp, n_cos=256,
+    )
 
 
-# (name, pricer callable, symmetry type)
 PRICERS = [
-    ("BsmModel",        _bsm_price,    "scale"),
-    ("HestonCOSPricer", _heston_price, "scale"),
-    ("NormalCos",       _normal_price, "translation"),
+    ("BsmModel",        _bsm_price),
+    ("HestonCOSPricer", _heston_price),
+    ("VgModel",         _vg_price),
+    ("CgmyModel",       _cgmy_price),
 ]
 
-# λ values from team_tasks.docx (Track A spec extended with negatives for
-# translation — Bachelier's symmetry is bidirectional).
 LAMBDAS = [0.1, 0.5, 2.0, 10.0, 100.0]
 
 SPOT    = 100.0
@@ -62,17 +64,12 @@ TEXPS   = [0.5, 1.0, 2.0]
 TOL     = 1e-10
 
 
-@pytest.mark.parametrize("name, pricer, symmetry", PRICERS,
+@pytest.mark.parametrize("name, pricer", PRICERS,
                          ids=[p[0] for p in PRICERS])
 @pytest.mark.parametrize("lam", LAMBDAS)
-def test_buckingham_pi(name, pricer, symmetry, lam):
+def test_buckingham_pi_scale(name, pricer, lam):
     """
-    Verify the dimensional symmetry appropriate to each model.
-
-    scale:
-        C(lam*S, lam*K) / (lam*S) == C(S, K) / S
-    translation:
-        C(S + lam, K + lam) == C(S, K)
+    Spatial scale invariance:  C(lam*S, lam*K) / (lam*S) == C(S, K) / S.
 
     Both cp values and the full (strike, texp) sweep run inside one test.
     """
@@ -81,19 +78,9 @@ def test_buckingham_pi(name, pricer, symmetry, lam):
 
     for cp in (+1, -1):
         for texp in TEXPS:
-            if symmetry == "scale":
-                base   = np.array([pricer(SPOT,       K,       texp, cp) for K in STRIKES])
-                other  = np.array([pricer(SPOT * lam, K * lam, texp, cp) for K in STRIKES])
-                err    = np.abs(other / (SPOT * lam) - base / SPOT)
-
-            elif symmetry == "translation":
-                base    = np.array([pricer(SPOT,       K,       texp, cp) for K in STRIKES])
-                other   = np.array([pricer(SPOT + lam, K + lam, texp, cp) for K in STRIKES])
-                err     = np.abs(other - base)
-
-            else:
-                pytest.fail(f"Unknown symmetry type: {symmetry}")
-
+            base  = np.array([pricer(SPOT,       K,       texp, cp) for K in STRIKES])
+            other = np.array([pricer(SPOT * lam, K * lam, texp, cp) for K in STRIKES])
+            err   = np.abs(other / (SPOT * lam) - base / SPOT)
             k = int(np.argmax(err))
             if float(err[k]) > worst:
                 worst       = float(err[k])
@@ -101,9 +88,8 @@ def test_buckingham_pi(name, pricer, symmetry, lam):
                                float(base[k]), float(other[k]))
 
     assert worst < TOL, (
-        f"{name} {symmetry}-invariance violated for lambda={lam}: "
+        f"{name} scale invariance violated for lambda={lam}: "
         f"max err = {worst:.2e} at cp={worst_where[0]}, T={worst_where[1]}, "
         f"K={worst_where[2]}; base={worst_where[3]:.10f}, "
         f"other={worst_where[4]:.10f}"
     )
-    
