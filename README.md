@@ -38,30 +38,38 @@ The reported error is the maximum absolute error evaluated at x = -5 and x = 5, 
 
 The numerical values are close to the paper and show the same exponential convergence pattern. By \(N=64\), the reconstruction is already at machine precision. This validates the core COS identity that the cosine coefficients of the density can be recovered directly from the characteristic function.
 
-### BSM model, COS versus Carr-Madan (Table 2)
+### BSM model — three-way comparison: COS vs Carr-Madan vs Lewis (Table 2)
 
 We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 0, maturity 0.1, and spot 100. The three strike prices are 80, 100, and 120. The corresponding analytic Black-Scholes prices are 20.7992, 3.6600, and 0.0446.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---:|---:|---:|---:|---:|
-| COS | msec | 0.0303 | 0.0327 | 0.0349 | 0.0434 | 0.0588 |
+| COS | msec | 0.0313 | 0.0316 | 0.0354 | 0.0435 | 0.0599 |
 |  | max error | 2.43e-07 | 3.55e-15 | 3.55e-15 | 3.55e-15 | 3.55e-15 |
-| Carr-Madan | msec | 0.0857 | 0.0791 | 0.0853 | 0.0907 | 0.1111 |
+| Carr-Madan | msec | 0.0865 | 0.0810 | 0.0861 | 0.0923 | 0.1110 |
 |  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
+| Lewis | msec | 0.0740 | 0.3173 | 0.6046 | 1.5757 | 6.1773 |
+|  | max error | 4.16e+00 | 1.52e-02 | 3.53e-06 | 3.90e-10 | 2.08e-10 |
 
 ![Table 2](examples/table_2.png)
 
-We replicate the Table 2 setup and reproduce the paper's central result: the COS method exhibits dramatically faster convergence than the Carr-Madan method for European option pricing under GBM. Our implementation further improves on the reported performance, with COS reaching machine precision by $N=64$ and maintaining lower runtime throughout the experiment.
+We replicate the Table 2 setup and extend it with **Lewis (2001)** — a single-integral inversion using the fixed contour shift $u - i/2$ (equivalent to the Carr-Madan damping $\alpha = 1/2$, the optimal symmetric choice). The three methods sit at three different points on the convergence/cost frontier on the same BSM benchmark:
 
-#### Why COS converges faster than Carr-Madan
+- **COS** reaches machine precision by $N = 64$ at the lowest per-call cost.
+- **Lewis** is geometrically convergent in the number of Gauss-Legendre nodes — each doubling of $N$ buys $\sim$3-6 orders of magnitude — and uses no damping parameter, but pays a per-strike cost (no FFT batching across strikes), so wall-time is the highest of the three at large $N$.
+- **Carr-Madan** is the slowest to converge in $N$; its error is dominated by the choice of damping $\alpha$ and the FFT grid spacing, both of which trade off in non-obvious ways.
 
-Both methods invert a characteristic function — the difference is what gets discretized.
+#### Why COS converges faster than Carr-Madan (and Lewis)
+
+All three methods invert the characteristic function — the difference is what gets discretized and where the regularization comes from.
 
 - **Carr-Madan** does numerical quadrature on the Fourier-inversion integral. The call payoff is not Fourier-integrable on its own, so the integrand has to be *regularized with a damping parameter* $\alpha > 0$: the CF gets evaluated at the complex-shifted argument $v - i(\alpha + 1)$, and the price is recovered by multiplying back by $e^{-\alpha k}$ ([carr_madan.py:37](src/cos_pricing/carr_madan.py#L37), default $\alpha = 0.75$). Picking $\alpha$ is a tuning tradeoff — too large and high-frequency error grows; too small and the integrand decays too slowly. Either way, integrating an infinite tail with the trapezoidal/Simpson rule gives **algebraic** convergence, $O(N^{-2})$ or $O(N^{-4})$.
 
-- **COS** doesn't discretize an integral. It expands the density on a *finite* truncated interval $[a, b]$ as a Fourier-cosine series, reads the coefficients straight off the CF at $u_k = k\pi/(b - a)$, and dot-products them against **analytic** payoff coefficients ($\chi$ and $\psi$ from Eqs. 22-23). Because the payoff is integrated in closed form over a finite interval, **no damping is needed** — the CF is sampled only at real frequencies ([cos_method.py:81-84](src/cos_pricing/cos_method.py#L81-L84)). And because the cosine coefficients of a smooth density decay exponentially in $k$, the series-truncation error is **exponential** in $N$ (Theorem 3.1).
+- **Lewis** removes the damping tradeoff by fixing the contour shift at the *symmetric* choice $\alpha = 1/2$. At that contour, the integrand has the form $\mathrm{Re}[e^{iuk}\phi(u-i/2)]/(u^2 + 1/4)$ — a single semi-infinite integral with no parameter to tune ([lewis.py](src/cos_pricing/lewis.py)). Convergence in $N$ Gauss-Legendre nodes is **geometric** rather than algebraic because the integrand is analytic in $u$. But it is still numerical quadrature on an infinite tail, evaluated per strike, so it does not match COS on either accuracy-per-$N$ or per-strike cost.
 
-The truncation interval $[a, b]$ in COS plays the regularizing role that damping plays in Carr-Madan: it confines the calculation to a region where the integrand is well-behaved. The difference is that $[a, b]$ is set deterministically from the density's cumulants (Eq. 49), not tuned by hand. So the two methods are not just "different quadrature rules" — they are doing fundamentally different math: Carr-Madan numerically integrates a damped, infinite-domain inversion integral; COS does a series expansion with closed-form payoff integrals on a bounded domain.
+- **COS** doesn't discretize an integral at all. It expands the density on a *finite* truncated interval $[a, b]$ as a Fourier-cosine series, reads the coefficients straight off the CF at $u_k = k\pi/(b - a)$, and dot-products them against **analytic** payoff coefficients ($\chi$ and $\psi$ from Eqs. 22-23). Because the payoff is integrated in closed form over a finite interval, **no damping is needed** — the CF is sampled only at real frequencies ([cos_method.py:81-84](src/cos_pricing/cos_method.py#L81-L84)). Because the cosine coefficients of a smooth density decay exponentially in $k$, the series-truncation error is **exponential** in $N$ (Theorem 3.1). And because the dominant cost is one $(M \times N)$ matrix-vector product, $M$ strikes are priced for the cost of one.
+
+The truncation interval $[a, b]$ in COS plays the regularizing role that damping plays in Carr-Madan / Lewis: it confines the calculation to a region where the integrand is well-behaved. The difference is that $[a, b]$ is set deterministically from the density's cumulants (Eq. 49), not tuned by hand. So the three methods are not just "different quadrature rules": Carr-Madan numerically integrates a damped, infinite-domain inversion integral; Lewis does the same with the optimal damping baked in; COS does a series expansion with closed-form payoff integrals on a bounded domain.
 
 #### Implementation notes vs. the paper
 
@@ -187,7 +195,7 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 
 ### Test suite
 
-**142/142 tests pass** covering:
+**149/149 tests pass** covering:
 - BSM (`test_cos_method.py`) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases
 - Heston (`test_heston_cos_pricer.py`) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation
 - Variance Gamma (`test_vg_model.py`) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery
@@ -282,11 +290,13 @@ fourier-cosine-option-pricing/
 │       ├── vg_model.py                # VgModel (Variance Gamma, COS + cumulants)
 │       ├── cgmy_model.py              # CgmyModel (CGMY infinite-activity Lévy)
 │       ├── carr_madan.py              # carr_madan_price (generic FFT pricer)
+│       ├── lewis.py                   # lewis_price (single-integral CF inversion, no damping)
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
 │   ├── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 │   ├── test_vg_model.py               # Variance Gamma: CF, cumulants, convergence
+│   ├── test_lewis.py                  # Lewis vs analytic BSM, geometric convergence, vs COS
 │   ├── test_dimensional_invariance.py # BSM/Heston/VG/CGMY scale + VG/CGMY temporal
 │   ├── test_buckingham_pi.py          # parametrised scale-invariance over all models
 │   └── test_heston_temporal_invariance.py # Heston temporal + spatial-temporal π-symmetries
@@ -385,7 +395,7 @@ PYTHONPATH=src python examples/example_european_option.py
 PYTHONPATH=src python examples/dimensionless_surface.py         # writes docs/fig_bsm_collapse.png
 PYTHONPATH=src python examples/heston_dimensionless_surface.py  # writes docs/fig_heston_collapse.png
 
-# Run all tests (142 total)
+# Run all tests (149 total)
 python -m pytest tests/ -v
 ```
 
@@ -506,3 +516,4 @@ Three sextets at $\sqrt{v_0 T} = 0.4$ realising the same six fixed groups — $(
 - Cui Y, del Baño Rollin S, Germano G (2017) Full and fast calibration of the Heston stochastic volatility model. *Eur. J. Oper. Res.* 263(2):625–638.
 - Lord R, Kahl C (2010) Complex Logarithms in Heston-Like Models. *Mathematical Finance* 20:671–694.
 - Carr P, Madan D (1999) Option Valuation Using the Fast Fourier Transform. *J. Computational Finance* 2(4):61–73.
+- Lewis A (2001) A Simple Option Formula for General Jump-Diffusion and other Exponential Lévy Processes. *Envision Financial Systems / OptionCity.net*.

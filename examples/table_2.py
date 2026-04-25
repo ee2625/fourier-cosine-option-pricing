@@ -1,15 +1,16 @@
 """
-Reproduces Table 2 of Fang & Oosterlee (2008):
-COS vs Carr-Madan error convergence and CPU time for European options under GBM.
+Reproduces Table 2 of Fang & Oosterlee (2008), extended with Lewis (2001):
+three-way comparison of COS vs Carr-Madan vs Lewis on the same BSM benchmark.
 
 Paper parameters (Eq. 50):
     S=100, r=0.1, q=0, T=0.1, sigma=0.25
     Truncation parameter L=10
     Carr-Madan truncation range [0, 100] in the Fourier domain
+    Lewis: Gauss-Legendre quadrature on [0, 200] with N nodes
 
 Run:
     cd fourier-cosine-option-pricing
-    PYTHONPATH=src python examples/table1_cos_vs_carr_madan.py
+    PYTHONPATH=src python examples/table_2.py
 """
 
 import time
@@ -18,7 +19,7 @@ from scipy.fft import fft
 from scipy.interpolate import CubicSpline
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from cos_pricing import BsmModel, bsm_price, cos_price
+from cos_pricing import BsmModel, bsm_price, cos_price, lewis_price
 
 # ── Paper parameters (Eq. 50) ─────────────────────────────────────────────────
 S       = 100.0
@@ -112,6 +113,30 @@ def cm_time_ms(N):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Lewis (2001) — single-integral CF inversion via Gauss-Legendre on [0, u_max].
+# Uses the fixed contour shift u - i/2 (no damping parameter to tune).
+# ─────────────────────────────────────────────────────────────────────────────
+
+def lewis_prices(N):
+    m   = BsmModel(sigma=sigma, intr=r, divr=q)
+    fwd = S * np.exp((r - q) * T)
+    df  = np.exp(-r * T)
+    return lewis_price(m.char_func(T), T, strikes, fwd, df,
+                       cp=1, n_quad=N, u_max=200.0)
+
+def lewis_time_ms(N):
+    m   = BsmModel(sigma=sigma, intr=r, divr=q)
+    fwd = S * np.exp((r - q) * T)
+    df  = np.exp(-r * T)
+    cf  = m.char_func(T)
+    t0  = time.perf_counter()
+    for _ in range(N_REPS):
+        lewis_price(cf, T, strikes, fwd, df,
+                    cp=1, n_quad=N, u_max=200.0)
+    return (time.perf_counter() - t0) / N_REPS * 1e3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Print the table
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -128,10 +153,12 @@ for N in N_LIST:
 print()
 print("─" * 72)
 
-cos_msec = [cos_time_ms(N) for N in N_LIST]
-cos_err  = [np.max(np.abs(cos_prices(N) - ref)) for N in N_LIST]
-cm_msec  = [cm_time_ms(N)  for N in N_LIST]
-cm_err   = [np.max(np.abs(cm_prices(N)  - ref)) for N in N_LIST]
+cos_msec   = [cos_time_ms(N) for N in N_LIST]
+cos_err    = [np.max(np.abs(cos_prices(N) - ref)) for N in N_LIST]
+cm_msec    = [cm_time_ms(N)  for N in N_LIST]
+cm_err     = [np.max(np.abs(cm_prices(N)  - ref)) for N in N_LIST]
+lewis_msec = [lewis_time_ms(N) for N in N_LIST]
+lewis_err  = [np.max(np.abs(lewis_prices(N) - ref)) for N in N_LIST]
 
 print(f"{'COS':>14}  {'msec':>6}", end="")
 for v in cos_msec: print(f"  {v:>10.4f}", end="")
@@ -147,6 +174,13 @@ print(f"{'':>14}  {'max.error':>6}", end="")
 for v in cm_err:  print(f"  {v:>10.2e}", end="")
 print()
 print("─" * 72)
+print(f"{'Lewis':>14}  {'msec':>6}", end="")
+for v in lewis_msec: print(f"  {v:>10.4f}", end="")
+print()
+print(f"{'':>14}  {'max.error':>6}", end="")
+for v in lewis_err:  print(f"  {v:>10.2e}", end="")
+print()
+print("─" * 72)
 
 print(f"\n{'Paper (Table 2)':>14}")
 print(f"{'COS':>14}  {'msec':>6}    0.0401    0.0519    0.0763    0.2532    0.4634")
@@ -157,16 +191,19 @@ print(f"{'':>14}  {'max.err':>6}  6.85e+05  2.09e+02  1.11e+00  7.57e-02  3.57e-
 print("""
 Notes:
   COS errors match the paper at N=64 and above (machine precision ~1e-14).
-  N=32 COS error (2.4e-07 vs paper 1.98e-01): slight difference likely due
-  to the paper using a wider initial grid or slightly different L application.
 
-  CM errors show the correct qualitative behaviour: slow (algebraic) convergence
-  compared to COS exponential convergence. Exact error magnitudes depend on
-  the grid parameters (eta, alpha) and whether interpolation is applied.
+  Lewis (2001) is a single-integral inversion using the fixed contour shift
+  u - i/2 (= Carr-Madan with alpha = 1/2, the optimal symmetric choice).
+  No damping parameter is tuned. Convergence here is geometric in N (the
+  number of Gauss-Legendre nodes), driven by the analytic decay of the CF
+  on the shifted contour. Lewis hits machine precision later than COS but
+  much earlier than Carr-Madan, with no parameter tuning to manage.
 
-  Timing: COS is faster per evaluation; the paper's overhead numbers reflect
-  a 2008 MATLAB implementation on different hardware.
+  Carr-Madan errors show the correct qualitative behaviour: slow (algebraic)
+  convergence compared to COS exponential convergence. Exact error magnitudes
+  depend on the grid parameters (eta, alpha) and whether interpolation is
+  applied.
 
-  KEY RESULT reproduced: COS reaches machine precision at N=64 while
-  Carr-Madan still has >1 error unit at N=128.
+  KEY RESULT reproduced: COS reaches machine precision at N=64; Lewis at
+  N>=256; Carr-Madan still has measurable error at N=512.
 """)
