@@ -35,6 +35,8 @@ class BsmModel:
     array([15.71361973,  9.69250803,  5.52948546,  2.94558338,  1.48139131])
     """
 
+    model_family = "gaussian_like"
+
     def __init__(self, sigma, intr=0.0, divr=0.0):
         self.sigma = sigma
         self.intr  = intr
@@ -56,6 +58,11 @@ class BsmModel:
             return np.exp(-0.5 * sig2t * uu * (1.0 - uu))
         return cf
 
+    def cumulants(self, texp):
+        """Exact BSM cumulants (c1, c2, c4) of log(S_T / F)."""
+        s2t = self.sigma ** 2 * texp
+        return -0.5 * s2t, s2t, 0.0
+
     def trunc_range(self, texp, L=12.0):
         """
         Exact BSM truncation interval. Cumulants: c1 = -0.5*sigma^2*T, c2 = sigma^2*T, c4 = 0.
@@ -70,19 +77,28 @@ class BsmModel:
         fwd = spot * np.exp((self.intr - self.divr) * texp)
         return fwd, df
 
-    def price(self, strike, spot, texp, cp=1, n_cos=128):
+    def price(self, strike, spot, texp, cp=1, n_cos=128, truncation="vanilla"):
         """
         European option price via the COS method.
 
         Parameters
         ----------
-        strike : float or array
-        spot   : float
-        texp   : float
-        cp     : +1 call / −1 put
-        n_cos  : int (default 128)
+        strike     : float or array
+        spot       : float
+        texp       : float
+        cp         : +1 call / −1 put
+        n_cos      : int (default 128)
+        truncation : ``"vanilla"`` — standard Fang-Oosterlee interval (default).
+                     ``"improved"`` — Junike adaptive truncation (ignores n_cos;
+                     N is chosen from the interval width and dx_target).
         """
         fwd, df = self._fwd_df(spot, texp)
+        if truncation == "improved":
+            from .cos_improved import cos_improved_price
+            return cos_improved_price(
+                self.char_func(texp), texp, strike, fwd, df,
+                self.cumulants(texp), cp=cp, model_family=self.model_family,
+            )
         return cos_price(self.char_func(texp), texp, strike, fwd, df,
                          cp=cp, n_cos=n_cos, trunc_range=self.trunc_range(texp))
 

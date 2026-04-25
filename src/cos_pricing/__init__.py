@@ -11,6 +11,7 @@ Reference:
 """
 
 from .cos_method import cos_price
+from .cos_improved import COSGridPolicy, cos_improved_grid, cos_improved_price, numerical_cumulants
 from .models import BsmModel
 from .heston_cos_pricer import (
     HestonCOSPricer,
@@ -29,6 +30,10 @@ from .cgmy_model import CgmyModel
 
 __all__ = [
     "cos_price",
+    "COSGridPolicy",
+    "cos_improved_grid",
+    "cos_improved_price",
+    "numerical_cumulants",
     "BsmModel",
     "HestonCOSPricer",
     "price_call_heston",

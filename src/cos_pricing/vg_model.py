@@ -26,6 +26,8 @@ class VgModel:
     divr  : float  Dividend yield. Default 0.
     """
 
+    model_family = "semi_heavy"
+
     def __init__(self, sigma, theta, nu, intr=0.0, divr=0.0):
         self.sigma = sigma
         self.theta = theta
@@ -60,8 +62,8 @@ class VgModel:
 
         return cf
 
-    def trunc_range(self, texp, L=10.0):
-        """Truncation interval [a, b] from analytic VG cumulants (Table 11)."""
+    def cumulants(self, texp):
+        """Analytic VG cumulants (c1, c2, c4) of log(S_T / F) (Table 11)."""
         sig2 = self.sigma ** 2
         w    = np.log(1.0 - self.theta * self.nu - 0.5 * sig2 * self.nu) / self.nu
         c1   = texp * (w + self.theta)
@@ -69,12 +71,28 @@ class VgModel:
         c4   = 3.0 * (sig2 ** 2 * self.nu
                       + 2.0 * self.theta ** 4 * self.nu ** 3
                       + 4.0 * sig2 * self.theta ** 2 * self.nu ** 2) * texp
+        return float(c1), float(c2), float(c4)
+
+    def trunc_range(self, texp, L=10.0):
+        """Truncation interval [a, b] from analytic VG cumulants (Table 11)."""
+        c1, c2, c4 = self.cumulants(texp)
         half = L * np.sqrt(abs(c2) + np.sqrt(abs(c4)))
         return c1 - half, c1 + half
 
-    def price(self, strike, spot, texp, cp=1, n_cos=128):
-        """European option price via the COS method."""
+    def price(self, strike, spot, texp, cp=1, n_cos=128, truncation="vanilla"):
+        """
+        European option price via the COS method.
+
+        truncation : ``"vanilla"`` standard Fang-Oosterlee (default);
+                     ``"improved"`` Junike adaptive (N chosen adaptively).
+        """
         fwd, df = self._fwd_df(spot, texp)
+        if truncation == "improved":
+            from .cos_improved import cos_improved_price
+            return cos_improved_price(
+                self.char_func(texp), texp, strike, fwd, df,
+                self.cumulants(texp), cp=cp, model_family=self.model_family,
+            )
         return cos_price(
             self.char_func(texp), texp, strike, fwd, df,
             cp=cp, n_cos=n_cos, trunc_range=self.trunc_range(texp),

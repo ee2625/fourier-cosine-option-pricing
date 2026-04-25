@@ -265,7 +265,8 @@ class HestonCOSPricer:
     the class is a thin caching layer on top.
     """
 
-    _CACHE_CAP = 64
+    _CACHE_CAP   = 64
+    model_family = "gaussian_like"
 
     def __init__(self, S0, v0, lam, eta, ubar, rho, r=0.0, q=0.0):
         """Store parameters, validate ranges (rho in (-1,1); v0, lam, eta, ubar > 0)."""
@@ -306,8 +307,22 @@ class HestonCOSPricer:
     # Pricing -- dispatches to the jitted kernels with caching
     # ------------------------------------------------------------------------
 
-    def price(self, K, tau, cp=1, N=160, L=None):
-        """European price (call cp=+1, put cp=-1) at strike(s) K and maturity tau."""
+    def price(self, K, tau, cp=1, N=160, L=None, truncation="vanilla"):
+        """European price (call cp=+1, put cp=-1) at strike(s) K and maturity tau.
+
+        truncation : ``"vanilla"`` standard Fang-Oosterlee kernels (default);
+                     ``"improved"`` Junike adaptive truncation (N chosen adaptively,
+                     L and N arguments are ignored).
+        """
+        if truncation == "improved":
+            from .cos_improved import cos_improved_price
+            fwd = self.S0 * np.exp((self.r - self.q) * tau)
+            df  = np.exp(-self.r * tau)
+            cf  = lambda u: self.char_func(u, tau)
+            return cos_improved_price(
+                cf, tau, K, fwd, df,
+                self.cumulants(tau), cp=cp, model_family=self.model_family,
+            )
         if tau <= 0.0:
             raise ValueError(f"tau must be > 0, got {tau}")
         if N < 1:
@@ -379,6 +394,10 @@ class HestonCOSPricer:
     def char_func(self, u, tau):
         """Heston CF of log(S_T/S0) at frequency u: phi(u) = mgf_logprice(i*u)."""
         return self.mgf_logprice(1j * np.asarray(u), tau)
+
+    def cumulants(self, tau):
+        """Public alias for (c1, c2, c4) of log(S_T / F); matches model interface."""
+        return self._cumulants(tau)
 
     def _cumulants(self, tau, eps=1e-4):
         """Cumulants (c1, c2, c4=0) of log(S_T/S0).
