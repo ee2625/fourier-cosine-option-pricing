@@ -22,6 +22,8 @@ from .heston_cos_pricer import (
 from .vg_model import VgModel
 from .carr_madan import carr_madan_price
 from .lewis import lewis_price
+from .frft import frft_price
+from .bermudan import BermudanCosBSM
 from .utils import bsm_price, bsm_impvol, convergence_table, benchmark_runtime
 from .cgmy_model import CgmyModel
 
@@ -37,6 +39,8 @@ __all__ = [
     "CgmyModel",
     "carr_madan_price",
     "lewis_price",
+    "frft_price",
+    "BermudanCosBSM",
     "bsm_price",
     "bsm_impvol",
     "convergence_table",

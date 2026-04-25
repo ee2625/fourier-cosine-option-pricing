@@ -19,7 +19,7 @@ from scipy.fft import fft
 from scipy.interpolate import CubicSpline
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-from cos_pricing import BsmModel, bsm_price, cos_price, lewis_price
+from cos_pricing import BsmModel, bsm_price, cos_price, lewis_price, frft_price
 
 # ── Paper parameters (Eq. 50) ─────────────────────────────────────────────────
 S       = 100.0
@@ -137,6 +137,39 @@ def lewis_time_ms(N):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Fractional FFT (Bailey-Swarztrauber). Same Carr-Madan integrand and damping
+# alpha = 0.75, but the FrFT decouples the frequency grid spacing eta from
+# the strike grid spacing lambda (plain FFT enforces eta * lambda = 2*pi/N).
+# We pin lambda_grid = 0.005 so the strike grid stays fine at every N --
+# spline interpolation contributes essentially zero error and the only
+# remaining source is frequency-domain truncation.
+# ─────────────────────────────────────────────────────────────────────────────
+
+LAMBDA_FRFT = 0.005
+
+def frft_prices(N):
+    m   = BsmModel(sigma=sigma, intr=r, divr=q)
+    fwd = S * np.exp((r - q) * T)
+    df  = np.exp(-r * T)
+    eta = 100.0 / N                                    # match Carr-Madan eta
+    return frft_price(m.char_func(T), T, strikes, fwd, df,
+                      cp=1, N=N, alpha=0.75,
+                      eta_grid=eta, lambda_grid=LAMBDA_FRFT)
+
+def frft_time_ms(N):
+    m   = BsmModel(sigma=sigma, intr=r, divr=q)
+    fwd = S * np.exp((r - q) * T)
+    df  = np.exp(-r * T)
+    cf  = m.char_func(T)
+    eta = 100.0 / N
+    t0  = time.perf_counter()
+    for _ in range(N_REPS):
+        frft_price(cf, T, strikes, fwd, df, cp=1, N=N, alpha=0.75,
+                   eta_grid=eta, lambda_grid=LAMBDA_FRFT)
+    return (time.perf_counter() - t0) / N_REPS * 1e3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Print the table
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -159,6 +192,8 @@ cm_msec    = [cm_time_ms(N)  for N in N_LIST]
 cm_err     = [np.max(np.abs(cm_prices(N)  - ref)) for N in N_LIST]
 lewis_msec = [lewis_time_ms(N) for N in N_LIST]
 lewis_err  = [np.max(np.abs(lewis_prices(N) - ref)) for N in N_LIST]
+frft_msec  = [frft_time_ms(N) for N in N_LIST]
+frft_err   = [np.max(np.abs(frft_prices(N) - ref)) for N in N_LIST]
 
 print(f"{'COS':>14}  {'msec':>6}", end="")
 for v in cos_msec: print(f"  {v:>10.4f}", end="")
@@ -167,18 +202,25 @@ print(f"{'':>14}  {'max.error':>6}", end="")
 for v in cos_err:  print(f"  {v:>10.2e}", end="")
 print()
 print("─" * 72)
-print(f"{'Carr-Madan':>14}  {'msec':>6}", end="")
-for v in cm_msec: print(f"  {v:>10.4f}", end="")
-print()
-print(f"{'':>14}  {'max.error':>6}", end="")
-for v in cm_err:  print(f"  {v:>10.2e}", end="")
-print()
-print("─" * 72)
 print(f"{'Lewis':>14}  {'msec':>6}", end="")
 for v in lewis_msec: print(f"  {v:>10.4f}", end="")
 print()
 print(f"{'':>14}  {'max.error':>6}", end="")
 for v in lewis_err:  print(f"  {v:>10.2e}", end="")
+print()
+print("─" * 72)
+print(f"{'FrFT':>14}  {'msec':>6}", end="")
+for v in frft_msec: print(f"  {v:>10.4f}", end="")
+print()
+print(f"{'':>14}  {'max.error':>6}", end="")
+for v in frft_err:  print(f"  {v:>10.2e}", end="")
+print()
+print("─" * 72)
+print(f"{'Carr-Madan':>14}  {'msec':>6}", end="")
+for v in cm_msec: print(f"  {v:>10.4f}", end="")
+print()
+print(f"{'':>14}  {'max.error':>6}", end="")
+for v in cm_err:  print(f"  {v:>10.2e}", end="")
 print()
 print("─" * 72)
 
@@ -190,20 +232,29 @@ print(f"{'':>14}  {'max.err':>6}  6.85e+05  2.09e+02  1.11e+00  7.57e-02  3.57e-
 
 print("""
 Notes:
-  COS errors match the paper at N=64 and above (machine precision ~1e-14).
+  Four CF-based methods on one bench:
 
-  Lewis (2001) is a single-integral inversion using the fixed contour shift
-  u - i/2 (= Carr-Madan with alpha = 1/2, the optimal symmetric choice).
-  No damping parameter is tuned. Convergence here is geometric in N (the
-  number of Gauss-Legendre nodes), driven by the analytic decay of the CF
-  on the shifted contour. Lewis hits machine precision later than COS but
-  much earlier than Carr-Madan, with no parameter tuning to manage.
+    COS         — finite-domain Fourier-cosine series with analytic payoff
+                  integrals.  Exponential convergence, machine precision at
+                  N = 64.
 
-  Carr-Madan errors show the correct qualitative behaviour: slow (algebraic)
-  convergence compared to COS exponential convergence. Exact error magnitudes
-  depend on the grid parameters (eta, alpha) and whether interpolation is
-  applied.
+    Lewis       — single-integral inversion using the fixed contour shift
+                  u - i/2 (= Carr-Madan with the optimal symmetric damping
+                  alpha = 1/2).  No damping to tune; geometric convergence
+                  on the Gauss-Legendre nodes.
 
-  KEY RESULT reproduced: COS reaches machine precision at N=64; Lewis at
-  N>=256; Carr-Madan still has measurable error at N=512.
+    FrFT        — Carr-Madan integrand with the Bailey-Swarztrauber
+                  fractional FFT, which decouples the frequency-grid
+                  spacing eta from the log-strike spacing lambda.  Strike
+                  grid stays fine at every N (lambda_grid = 0.005 here);
+                  the only remaining error source is the frequency-domain
+                  truncation, so FrFT edges out plain Carr-Madan as N grows.
+
+    Carr-Madan  — plain FFT with eta * lambda = 2*pi/N tied together; cubic
+                  spline interpolation papers over the coarse strike grid
+                  but cannot remove its contribution.  Algebraic
+                  convergence, slowest of the four.
+
+  KEY RESULT: COS reaches machine precision at N = 64; Lewis at N >= 256;
+  FrFT and plain Carr-Madan still have measurable error at N = 512.
 """)

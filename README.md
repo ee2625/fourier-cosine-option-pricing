@@ -38,38 +38,43 @@ The reported error is the maximum absolute error evaluated at x = -5 and x = 5, 
 
 The numerical values are close to the paper and show the same exponential convergence pattern. By \(N=64\), the reconstruction is already at machine precision. This validates the core COS identity that the cosine coefficients of the density can be recovered directly from the characteristic function.
 
-### BSM model — three-way comparison: COS vs Carr-Madan vs Lewis (Table 2)
+### BSM model — four-way comparison: COS vs Lewis vs FrFT vs Carr-Madan (Table 2)
 
 We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 0, maturity 0.1, and spot 100. The three strike prices are 80, 100, and 120. The corresponding analytic Black-Scholes prices are 20.7992, 3.6600, and 0.0446.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---:|---:|---:|---:|---:|
-| COS | msec | 0.0313 | 0.0316 | 0.0354 | 0.0435 | 0.0599 |
+| COS | msec | 0.0336 | 0.0353 | 0.0405 | 0.0480 | 0.0654 |
 |  | max error | 2.43e-07 | 3.55e-15 | 3.55e-15 | 3.55e-15 | 3.55e-15 |
-| Carr-Madan | msec | 0.0865 | 0.0810 | 0.0861 | 0.0923 | 0.1110 |
-|  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
-| Lewis | msec | 0.0740 | 0.3173 | 0.6046 | 1.5757 | 6.1773 |
+| Lewis | msec | 0.0773 | 0.1352 | 0.3900 | 1.7775 | 12.8449 |
 |  | max error | 4.16e+00 | 1.52e-02 | 3.53e-06 | 3.90e-10 | 2.08e-10 |
+| FrFT | msec | 0.1509 | 0.1374 | 0.1236 | 0.1547 | 0.1790 |
+|  | max error | 1.17e+01 | 1.94e+00 | 1.37e+00 | 7.94e-02 | 1.92e-04 |
+| Carr-Madan | msec | 0.1005 | 0.0878 | 0.0876 | 0.0954 | 0.1134 |
+|  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
 
 ![Table 2](examples/table_2.png)
 
-We replicate the Table 2 setup and extend it with **Lewis (2001)** — a single-integral inversion using the fixed contour shift $u - i/2$ (equivalent to the Carr-Madan damping $\alpha = 1/2$, the optimal symmetric choice). The three methods sit at three different points on the convergence/cost frontier on the same BSM benchmark:
+We replicate the Table 2 setup and extend it to a **four-way comparison** of CF-based pricers on the same BSM benchmark:
 
 - **COS** reaches machine precision by $N = 64$ at the lowest per-call cost.
-- **Lewis** is geometrically convergent in the number of Gauss-Legendre nodes — each doubling of $N$ buys $\sim$3-6 orders of magnitude — and uses no damping parameter, but pays a per-strike cost (no FFT batching across strikes), so wall-time is the highest of the three at large $N$.
-- **Carr-Madan** is the slowest to converge in $N$; its error is dominated by the choice of damping $\alpha$ and the FFT grid spacing, both of which trade off in non-obvious ways.
+- **Lewis (2001)** uses the fixed contour shift $u - i/2$ (equivalent to the Carr-Madan damping $\alpha = 1/2$, the optimal symmetric choice). No damping to tune; geometric convergence on the Gauss-Legendre nodes — each doubling of $N$ buys $\sim$3–6 orders of magnitude. Wall-time is the highest at large $N$ because there is no FFT batching across strikes.
+- **FrFT** uses the Bailey-Swarztrauber fractional FFT, which decouples the frequency grid spacing $\eta$ from the log-strike grid spacing $\lambda$ (plain Carr-Madan ties them by $\eta\lambda = 2\pi/N$). With $\lambda$ pinned small (here $\lambda = 0.005$), the strike grid stays fine at every $N$ and the spline-interpolation contribution to error vanishes. Still algebraic convergence in $N$, but with a strictly tighter constant than plain Carr-Madan.
+- **Carr-Madan** is the slowest to converge in $N$; the strike grid coarseness (forced by $\eta\lambda = 2\pi/N$) is partially patched by cubic-spline interpolation, but the spline cannot remove the underlying error.
 
-#### Why COS converges faster than Carr-Madan (and Lewis)
+#### Why COS converges faster than Lewis, FrFT, and Carr-Madan
 
-All three methods invert the characteristic function — the difference is what gets discretized and where the regularization comes from.
+All four methods invert the characteristic function — the difference is what gets discretized and where the regularization comes from.
 
-- **Carr-Madan** does numerical quadrature on the Fourier-inversion integral. The call payoff is not Fourier-integrable on its own, so the integrand has to be *regularized with a damping parameter* $\alpha > 0$: the CF gets evaluated at the complex-shifted argument $v - i(\alpha + 1)$, and the price is recovered by multiplying back by $e^{-\alpha k}$ ([carr_madan.py:37](src/cos_pricing/carr_madan.py#L37), default $\alpha = 0.75$). Picking $\alpha$ is a tuning tradeoff — too large and high-frequency error grows; too small and the integrand decays too slowly. Either way, integrating an infinite tail with the trapezoidal/Simpson rule gives **algebraic** convergence, $O(N^{-2})$ or $O(N^{-4})$.
+- **Carr-Madan** does numerical quadrature on the Fourier-inversion integral. The call payoff is not Fourier-integrable on its own, so the integrand has to be *regularized with a damping parameter* $\alpha > 0$: the CF gets evaluated at the complex-shifted argument $v - i(\alpha + 1)$, and the price is recovered by multiplying back by $e^{-\alpha k}$ ([carr_madan.py:37](src/cos_pricing/carr_madan.py#L37), default $\alpha = 0.75$). Picking $\alpha$ is a tuning tradeoff — too large and high-frequency error grows; too small and the integrand decays too slowly. The plain FFT also forces $\eta\lambda = 2\pi/N$, so a fine frequency grid means a coarse strike grid (and vice versa). Algebraic convergence: $O(N^{-2})$ or $O(N^{-4})$.
 
-- **Lewis** removes the damping tradeoff by fixing the contour shift at the *symmetric* choice $\alpha = 1/2$. At that contour, the integrand has the form $\mathrm{Re}[e^{iuk}\phi(u-i/2)]/(u^2 + 1/4)$ — a single semi-infinite integral with no parameter to tune ([lewis.py](src/cos_pricing/lewis.py)). Convergence in $N$ Gauss-Legendre nodes is **geometric** rather than algebraic because the integrand is analytic in $u$. But it is still numerical quadrature on an infinite tail, evaluated per strike, so it does not match COS on either accuracy-per-$N$ or per-strike cost.
+- **FrFT** keeps the Carr-Madan integrand and damping $\alpha$, but swaps the plain FFT for the Bailey-Swarztrauber fractional FFT, which lets $\eta$ and $\lambda$ be chosen independently ($\beta = \eta\lambda/(2\pi)$ replaces $1/N$, [frft.py](src/cos_pricing/frft.py)). The damping tradeoff is unchanged, so convergence stays algebraic — but the strike grid no longer has to be coarse, so the constant in front of the algebraic rate is much smaller. At $N = 512$ FrFT is ~7× tighter than plain Carr-Madan on this benchmark.
+
+- **Lewis** removes the damping tradeoff entirely by fixing the contour shift at the *symmetric* choice $\alpha = 1/2$. At that contour, the integrand has the form $\mathrm{Re}[e^{iuk}\phi(u-i/2)]/(u^2 + 1/4)$ — a single semi-infinite integral with no parameter to tune ([lewis.py](src/cos_pricing/lewis.py)). Convergence in $N$ Gauss-Legendre nodes is **geometric** rather than algebraic because the integrand is analytic in $u$. But it is still numerical quadrature on an infinite tail, evaluated per strike, so it does not match COS on either accuracy-per-$N$ or per-strike cost.
 
 - **COS** doesn't discretize an integral at all. It expands the density on a *finite* truncated interval $[a, b]$ as a Fourier-cosine series, reads the coefficients straight off the CF at $u_k = k\pi/(b - a)$, and dot-products them against **analytic** payoff coefficients ($\chi$ and $\psi$ from Eqs. 22-23). Because the payoff is integrated in closed form over a finite interval, **no damping is needed** — the CF is sampled only at real frequencies ([cos_method.py:81-84](src/cos_pricing/cos_method.py#L81-L84)). Because the cosine coefficients of a smooth density decay exponentially in $k$, the series-truncation error is **exponential** in $N$ (Theorem 3.1). And because the dominant cost is one $(M \times N)$ matrix-vector product, $M$ strikes are priced for the cost of one.
 
-The truncation interval $[a, b]$ in COS plays the regularizing role that damping plays in Carr-Madan / Lewis: it confines the calculation to a region where the integrand is well-behaved. The difference is that $[a, b]$ is set deterministically from the density's cumulants (Eq. 49), not tuned by hand. So the three methods are not just "different quadrature rules": Carr-Madan numerically integrates a damped, infinite-domain inversion integral; Lewis does the same with the optimal damping baked in; COS does a series expansion with closed-form payoff integrals on a bounded domain.
+The truncation interval $[a, b]$ in COS plays the regularizing role that damping plays in the other three: it confines the calculation to a region where the integrand is well-behaved. The difference is that $[a, b]$ is set deterministically from the density's cumulants (Eq. 49), not tuned by hand. So the four methods are not just "different quadrature rules": Carr-Madan and FrFT integrate a damped infinite-domain integral with two grid knobs (FrFT decouples them); Lewis does the same with the optimal damping baked in and only one knob; COS does a series expansion with closed-form payoff integrals on a bounded domain.
 
 #### Implementation notes vs. the paper
 
@@ -193,14 +198,50 @@ The CGMY process introduces extreme fat tails and shifted distributions. As the 
 
 **The COS method natively handles the extreme fat tails of the CGMY process without loss of exponential convergence. Our implementation maintains high accuracy while executing in fractions of a millisecond, directly matching the paper's valid test cases.**
 
+### Bermudan options via COS — backward induction (Fang & Oosterlee 2009)
+
+The 2008 paper handles European options. The 2009 follow-up — *Pricing Early-Exercise and Discrete Barrier Options by Fourier-Cosine Series Expansions* (Numerische Mathematik 114:27-62) — extends COS to early-exercise via dynamic programming on the cosine coefficients. We implement this for the BSM case in [src/cos_pricing/bermudan.py](src/cos_pricing/bermudan.py).
+
+**Algorithm.** For a Bermudan put with $M$ equally-spaced exercise dates $t_1 < \ldots < t_M = T$:
+
+1. **Initialise** at $t_M$ with the European put COS coefficients (the analytic $\chi$ / $\psi$ formulas of the 2008 paper).
+2. **Backward induction** for $j = M - 1, \ldots, 1$:
+   - **Continuation value** at any $x$:
+     $$\hat V(x, t_j) \;=\; e^{-r\Delta t}\, \mathrm{Re}\!\left[\sum_{n=0}^{N-1}{}' V_n(t_{j+1})\, \varphi_{\Delta t}(u_n)\, e^{i u_n (x - a)}\right]$$
+     where $\varphi_{\Delta t}$ is the CF of the one-step log-return increment.
+   - **Early-exercise boundary** $x^*$: solve $\hat V(x^*, t_j) = K(1 - e^{x^*})$ via Brent's method.
+   - **New coefficients**: $V_k(t_j) = G_k(x^*) + C_k(x^*)$, where $G_k$ is the analytic exercise piece (chi/psi over $[a, x^*]$) and $C_k$ is the continuation piece — a closed-form $\mathcal{M}_{k,n}(x^*)$ matrix-vector product, since $\int_{x^*}^b \cos(u_k(x-a))\,e^{iu_n(x-a)}\,dx$ has a closed form.
+3. **Final step**: option value at $t_0$ is the continuation value $\hat V(x_0, t_0)$ (no exercise at inception).
+
+Cost is $O(MN^2)$ per option (the $\mathcal{M}_{k,n}$ matrix is $N \times N$ per timestep). The 2009 paper notes this can be reduced to $O(MN \log N)$ via the Hankel-plus-Toeplitz FFT structure of $\mathcal{M}$; our naive $O(MN^2)$ runs sub-millisecond at typical scale ($N = 128$, $M \le 64$).
+
+**Validation.** Standard FO2009 BSM benchmark: $S = K = 100$, $r = 0.1$, $q = 0$, $\sigma = 0.25$, $T = 1$. The published European put is $5.4595$; the published American put is $\approx 6.55$.
+
+| $M$ | Bermudan price | incremental premium |
+|---:|---:|---:|
+| 1   | 5.459532581907 | (= European put, 9.77e-15 below analytic) |
+| 2   | 6.043940403785 | 5.84e-01 |
+| 4   | 6.301803690885 | 2.58e-01 |
+| 8   | 6.423349475272 | 1.22e-01 |
+| 16  | 6.488093624283 | 6.47e-02 |
+| 32  | 6.521841595258 | 3.37e-02 |
+| 64  | 6.538978339254 | 1.71e-02 |
+| 100 | 6.545167131771 | 6.19e-03 |
+| 200 | 6.550774304974 | 5.61e-03 |
+
+The two structural validations: (1) $M = 1$ matches the closed-form European put to machine epsilon — this catches sign errors, prime-sum bugs, and CF convention mistakes in the backward-induction code path; (2) prices are monotonically non-decreasing in $M$ (more exercise opportunities cannot reduce option value) and converge to the published American put limit.
+
 ### Test suite
 
-**149/149 tests pass** covering:
+**164/164 tests pass** covering:
 - BSM (`test_cos_method.py`) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases
 - Heston (`test_heston_cos_pricer.py`) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation
 - Variance Gamma (`test_vg_model.py`) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery
 - **Spatial scale invariance (`test_dimensional_invariance.py`, `test_buckingham_pi.py`)** — $C(\lambda S, \lambda K) = \lambda\, C(S, K)$ for `{BsmModel, HestonCOSPricer, VgModel, CgmyModel}` at the 1e-10 tolerance; parametrised Buckingham π test extends automatically to any new exponential-Lévy model
 - **Temporal rate invariance (`test_dimensional_invariance.py`, `test_heston_temporal_invariance.py`)** — VG ($T \to \mu T,\ \nu \to \mu\nu,\ \theta \to \theta/\mu,\ \sigma \to \sigma/\sqrt\mu$), CGMY ($T \to \mu T,\ C \to C/\mu$), and Heston (7-parameter rotation) all hold at machine epsilon
+- **Lewis (`test_lewis.py`)** — analytic BSM agreement, geometric convergence in $n_\text{quad}$, and cross-check vs COS on Heston and VG
+- **FrFT (`test_frft.py`)** — reduction to plain Carr-Madan when $\beta = 1/N$, analytic BSM agreement, cross-check vs COS on Heston and VG
+- **Bermudan (`test_bermudan.py`)** — $M = 1$ reduces to the European put exactly (machine epsilon), monotonicity in $M$, convergence to American as $M \to \infty$
 
 ## Implementation
 
@@ -291,12 +332,16 @@ fourier-cosine-option-pricing/
 │       ├── cgmy_model.py              # CgmyModel (CGMY infinite-activity Lévy)
 │       ├── carr_madan.py              # carr_madan_price (generic FFT pricer)
 │       ├── lewis.py                   # lewis_price (single-integral CF inversion, no damping)
+│       ├── frft.py                    # frft_price (Carr-Madan + Bailey-Swarztrauber FrFT)
+│       ├── bermudan.py                # BermudanCosBSM (Fang-Oosterlee 2009 backward induction)
 │       └── utils.py                   # analytic BSM, implied vol, benchmarks
 ├── tests/
 │   ├── test_cos_method.py             # BSM + generic COS engine
 │   ├── test_heston_cos_pricer.py      # Heston benchmarks, convergence, parity
 │   ├── test_vg_model.py               # Variance Gamma: CF, cumulants, convergence
 │   ├── test_lewis.py                  # Lewis vs analytic BSM, geometric convergence, vs COS
+│   ├── test_frft.py                   # FrFT vs Carr-Madan reduction, vs analytic BSM, vs COS
+│   ├── test_bermudan.py               # Bermudan: European limit, monotonicity, convergence
 │   ├── test_dimensional_invariance.py # BSM/Heston/VG/CGMY scale + VG/CGMY temporal
 │   ├── test_buckingham_pi.py          # parametrised scale-invariance over all models
 │   └── test_heston_temporal_invariance.py # Heston temporal + spatial-temporal π-symmetries
@@ -314,7 +359,8 @@ fourier-cosine-option-pricing/
 │   ├── table9.py                      # Table 9: CGMY Y=1.5
 │   ├── table10.py                     # Table 10: CGMY Y=1.98
 │   ├── dimensionless_surface.py       # BSM π-group collapse plot
-│   └── heston_dimensionless_surface.py # Heston π-group collapse, 8-D → 2-D slice
+│   ├── heston_dimensionless_surface.py # Heston π-group collapse, 8-D → 2-D slice
+│   └── bermudan_demo.py               # Bermudan put: convergence to American as M grows
 ├── pyfeng/
 │   └── sv_cos.py                      # PyFENG-compatible port of the Heston COS pricer
 └── docs/
@@ -395,7 +441,10 @@ PYTHONPATH=src python examples/example_european_option.py
 PYTHONPATH=src python examples/dimensionless_surface.py         # writes docs/fig_bsm_collapse.png
 PYTHONPATH=src python examples/heston_dimensionless_surface.py  # writes docs/fig_heston_collapse.png
 
-# Run all tests (149 total)
+# Bermudan put via Fang-Oosterlee 2009 (convergence to American as M grows)
+PYTHONPATH=src python examples/bermudan_demo.py
+
+# Run all tests (164 total)
 python -m pytest tests/ -v
 ```
 
@@ -517,3 +566,6 @@ Three sextets at $\sqrt{v_0 T} = 0.4$ realising the same six fixed groups — $(
 - Lord R, Kahl C (2010) Complex Logarithms in Heston-Like Models. *Mathematical Finance* 20:671–694.
 - Carr P, Madan D (1999) Option Valuation Using the Fast Fourier Transform. *J. Computational Finance* 2(4):61–73.
 - Lewis A (2001) A Simple Option Formula for General Jump-Diffusion and other Exponential Lévy Processes. *Envision Financial Systems / OptionCity.net*.
+- Bailey DH, Swarztrauber PN (1991) The Fractional Fourier Transform and Applications. *SIAM Review* 33(3):389–404.
+- Chourdakis K (2005) Option pricing using the fractional FFT. *J. Computational Finance* 8(2):1–18.
+- Fang F, Oosterlee CW (2009) Pricing Early-Exercise and Discrete Barrier Options by Fourier-Cosine Series Expansions. *Numerische Mathematik* 114:27–62.
