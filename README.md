@@ -53,6 +53,18 @@ We consider a GBM model with volatility 0.25, interest rate 0.1, dividend yield 
 
 We replicate the Table 2 setup and reproduce the paper's central result: the COS method exhibits dramatically faster convergence than the Carr-Madan method for European option pricing under GBM. Our implementation further improves on the reported performance, with COS reaching machine precision by $N=64$ and maintaining lower runtime throughout the experiment.
 
+#### Why COS converges faster than Carr-Madan
+
+Both methods invert a characteristic function — the difference is what gets discretized.
+
+- **Carr-Madan** does numerical quadrature on the Fourier-inversion integral. The call payoff is not Fourier-integrable on its own, so the integrand has to be *regularized with a damping parameter* $\alpha > 0$: the CF gets evaluated at the complex-shifted argument $v - i(\alpha + 1)$, and the price is recovered by multiplying back by $e^{-\alpha k}$ ([carr_madan.py:37](src/cos_pricing/carr_madan.py#L37), default $\alpha = 0.75$). Picking $\alpha$ is a tuning tradeoff — too large and high-frequency error grows; too small and the integrand decays too slowly. Either way, integrating an infinite tail with the trapezoidal/Simpson rule gives **algebraic** convergence, $O(N^{-2})$ or $O(N^{-4})$.
+
+- **COS** doesn't discretize an integral. It expands the density on a *finite* truncated interval $[a, b]$ as a Fourier-cosine series, reads the coefficients straight off the CF at $u_k = k\pi/(b - a)$, and dot-products them against **analytic** payoff coefficients ($\chi$ and $\psi$ from Eqs. 22-23). Because the payoff is integrated in closed form over a finite interval, **no damping is needed** — the CF is sampled only at real frequencies ([cos_method.py:81-84](src/cos_pricing/cos_method.py#L81-L84)). And because the cosine coefficients of a smooth density decay exponentially in $k$, the series-truncation error is **exponential** in $N$ (Theorem 3.1).
+
+The truncation interval $[a, b]$ in COS plays the regularizing role that damping plays in Carr-Madan: it confines the calculation to a region where the integrand is well-behaved. The difference is that $[a, b]$ is set deterministically from the density's cumulants (Eq. 49), not tuned by hand. So the two methods are not just "different quadrature rules" — they are doing fundamentally different math: Carr-Madan numerically integrates a damped, infinite-domain inversion integral; COS does a series expansion with closed-form payoff integrals on a bounded domain.
+
+#### Implementation notes vs. the paper
+
 **Why our COS converges faster than the paper.** We use analytic BSM cumulants ($c_1 = -\frac{1}{2}\sigma^2 T$, $c_2 = \sigma^2 T$, $c_4 = 0$) to set the tightest possible truncation range $[a, b]$. For $T=0.1$, $\sigma=0.25$, this gives a window of width $\approx 1.58$, so even $N=32$ cosine terms are already very fine-grained relative to the density's support. The paper uses a wider, more conservative range, which requires more terms to converge.
 
 **Why our Carr-Madan is more accurate than the paper.** We add cubic spline interpolation to evaluate prices at the exact target strike values. The paper evaluates at the nearest grid point with no interpolation, which causes large errors at small $N$ when the strikes do not land on the FFT grid.
