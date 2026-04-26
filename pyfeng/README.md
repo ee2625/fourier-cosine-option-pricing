@@ -22,6 +22,11 @@ This folder contains the COS method implementation integrated into
   `BermudanCgmyCos` are pre-mixed concrete classes.  Heston is
   intentionally excluded -- its 2-D state requires the F&O 2009 §4
   extension that this 1-D mixin does not implement.
+- `frft.py` — Carr-Madan pricing via the Bailey-Swarztrauber fractional
+  FFT (Chourdakis 2005).  `FrftMixin` adds `price_frft()` to any
+  `FftABC` subclass; `BsmFrft`, `VarGammaFrft`, `CgmyFrft`, and
+  `HestonFrft` are pre-mixed concrete classes that decouple the
+  frequency-grid spacing from the log-strike grid spacing.
 
 ## Usage with PyFENG
 
@@ -33,6 +38,7 @@ from .sv_cos import BsmCos
 from .sv_heston_cos import HestonCos
 from .lv_cos import VarGammaCos, CgmyCos
 from .bermudan_cos import BermudanBsmCos, BermudanVgCos, BermudanCgmyCos
+from .frft import BsmFrft, VarGammaFrft, CgmyFrft, HestonFrft
 ```
 
 Then use it like any other PyFENG model:
