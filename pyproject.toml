@@ -7,11 +7,15 @@ name = "cos_pricing"
 version = "0.1.0"
 description = "Implementation of the Fang-Oosterlee COS method for European option pricing"
 authors = [
-    {name = "Your Team"}
+    {name = "Alick Zhou"},
+    {name = "Erce Erez"},
+    {name = "Michael Bakshandeh"},
+    {name = "Tanay Kane"}
 ]
 requires-python = ">=3.10"
 dependencies = [
     "numpy",
     "scipy",
+    "numba",
     "matplotlib"
 ]
