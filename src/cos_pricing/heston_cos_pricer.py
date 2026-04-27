@@ -380,18 +380,52 @@ class HestonCOSPricer:
         """Heston CF of log(S_T/S0) at frequency u: phi(u) = mgf_logprice(i*u)."""
         return self.mgf_logprice(1j * np.asarray(u), tau)
 
-    def _cumulants(self, tau, eps=1e-4):
+    def _cumulants(self, tau):
         """Cumulants (c1, c2, c4=0) of log(S_T/S0).
 
-        c1 is exact-analytic; c2 is recovered by central finite differences
-        of log(MGF) at the real axis. The often-cited closed-form Heston c2
-        from F&O Appendix A.2 has a transcription typo that surfaces as a
-        ~7e-4 absolute discrepancy against the MGF-derived value, so we
-        derive c2 from ``mgf_logprice`` directly (single source of truth).
-        c4 = 0 per paper Section 5 (used only as a sentinel by callers).
+        c1 is exact-analytic (see _c1).  c2 is the corrected analytic formula
+        from Le Floc'h (2020) arXiv:2005.13248, Appendix B, Eq. (B5):
+
+            c2 = (v0 / (4*lam^3)) * [
+                    4*lam^2*(1 + (rho*eta*t - 1)*e^{-lam*t})
+                  + lam*(4*rho*eta*(e^{-lam*t} - 1) - 2*eta^2*t*e^{-lam*t})
+                  + eta^2*(1 - e^{-2*lam*t})
+                 ]
+               + (ubar / (8*lam^3)) * [
+                    8*lam^3*t
+                  - 8*lam^2*(1 + rho*eta*t + (rho*eta*t - 1)*e^{-lam*t})
+                  + 2*lam*((1 + 2*e^{-lam*t})*eta^2*t + 8*(1 - e^{-lam*t})*rho*eta)
+                  + eta^2*(e^{-2*lam*t} + 4*e^{-lam*t} - 5)
+                 ]
+
+        c4 = 0 per F&O Section 5 (sentinel for callers).
         """
-        K = lambda uu: float(np.log(self.mgf_logprice(uu, tau)).real)
-        c2 = (K(eps) + K(-eps) - 2.0 * K(0.0)) / (eps * eps)
+        # --- Corrected c2: second cumulant of log(F(T)/F(0)) for Heston ---
+        # The original c2 formula in Fang & Oosterlee (2008) Appendix A is incorrect.
+        # This corrected version is from:
+        #   Le Floc'h (2020), "More Robust Pricing of European Options Based on
+        #   Fourier Cosine Series Expansions", arXiv:2005.13248, Appendix B, Eq. (B5).
+        #
+        # c2 = g''(0) where g(u) = log(phi(-iu)) is the cumulant generating function.
+        # It controls the COS truncation range [a,b] = [c1 - L*sqrt(|c2|), c1 + L*sqrt(|c2|)].
+        # Getting c2 right improves robustness for short maturities and deep OTM options.
+        lam, ubar, eta, rho, v0 = self.lam, self.ubar, self.eta, self.rho, self.v0
+        eT  = np.exp(-lam * tau)
+        e2T = eT * eT
+        rs  = rho * eta
+        s2  = eta * eta
+
+        c2 = (v0 / (4.0 * lam**3)) * (
+                4.0 * lam**2 * (1.0 + (rs * tau - 1.0) * eT)
+              + lam * (4.0 * rs * (eT - 1.0) - 2.0 * s2 * tau * eT)
+              + s2 * (1.0 - e2T)
+             ) \
+           + (ubar / (8.0 * lam**3)) * (
+                8.0 * lam**3 * tau
+              - 8.0 * lam**2 * (1.0 + rs * tau + (rs * tau - 1.0) * eT)
+              + 2.0 * lam * ((1.0 + 2.0 * eT) * s2 * tau + 8.0 * (1.0 - eT) * rs)
+              + s2 * (e2T + 4.0 * eT - 5.0)
+             )
         return self._c1(tau), c2, 0.0
 
     def _c1(self, tau):
