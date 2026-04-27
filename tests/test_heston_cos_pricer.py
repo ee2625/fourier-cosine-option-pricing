@@ -174,3 +174,14 @@ def test_invalid_tau_raises():
         m.price_call(100.0, 0.0)
     with pytest.raises(ValueError):
         m.price_call(100.0, 1.0, N=0)
+
+
+def test_analytic_c2_matches_mgf_second_derivative():
+    """Le Floc'h analytic c2 must agree with FD second derivative of log(MGF)."""
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    for tau in (0.01, 0.5, 1.0, 5.0, 10.0):
+        _, c2_an, _ = m._cumulants(tau)
+        eps = 1e-4
+        K = lambda uu: float(np.log(m.mgf_logprice(uu, tau)).real)
+        c2_num = (K(eps) + K(-eps) - 2.0 * K(0.0)) / (eps * eps)
+        assert abs(c2_an - c2_num) < 1e-5, f"tau={tau}: c2 mismatch {c2_an} vs {c2_num}"
