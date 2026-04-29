@@ -78,6 +78,34 @@ class VarGammaCos(VarGammaFft, CosABC):
     # MRO routes price() through FftABC by default; rebind to the COS path.
     price = CosABC.price
 
+    def __init__(self, sigma, vov, theta=0.0, **kwargs):
+        """Pre-validate sigma > 0, vov > 0 before delegating to VarGammaFft.
+
+        VarGammaFft only enforces the omega constraint
+        ``1 - theta*vov - 0.5*sigma^2*vov > 0``; it accepts sigma <= 0 and
+        vov <= 0 silently, which produces NaNs downstream.  We surface those
+        as ValueError to match the rest of the COS-family input validation.
+        """
+        if sigma <= 0:
+            raise ValueError(f"sigma must be > 0, got {sigma}")
+        if vov <= 0:
+            raise ValueError(f"vov (Gamma variance rate) must be > 0, got {vov}")
+        super().__init__(sigma=sigma, vov=vov, theta=theta, **kwargs)
+
+    def mgf_logprice(self, uu, texp):
+        """Wrap VarGammaFft.mgf_logprice to handle scalar inputs.
+
+        Upstream VarGammaFft.mgf_logprice uses np.exp(out=rv); on numpy 2.x
+        rv must be a writable array, not a 0-d scalar.  We promote scalar
+        inputs to length-1 arrays and unwrap the result to preserve the
+        scalar-in-scalar-out contract callers expect.
+        """
+        uu_arr = np.atleast_1d(np.asarray(uu) + 0j)
+        out = super().mgf_logprice(uu_arr, texp)
+        if np.ndim(uu) == 0:
+            return complex(np.asarray(out).flat[0])
+        return out
+
     def _cumulants(self, texp):
         """Analytic VG cumulants of log(S_T/F) -- F&O 2008 Table 11.
 
@@ -146,6 +174,17 @@ class CgmyCos(CgmyFft, CosABC):
 
     # MRO routes price() through FftABC by default; rebind to the COS path.
     price = CosABC.price
+
+    def mgf_logprice(self, uu, texp):
+        """Wrap CgmyFft.mgf_logprice to handle scalar inputs.
+
+        Same numpy-2.x scalar-vs-array workaround as VarGammaCos.mgf_logprice.
+        """
+        uu_arr = np.atleast_1d(np.asarray(uu) + 0j)
+        out = super().mgf_logprice(uu_arr, texp)
+        if np.ndim(uu) == 0:
+            return complex(np.asarray(out).flat[0])
+        return out
 
     def _truncation_range(self, texp):
         """COS truncation range -- F&O 2008 Section 5.4 Y-dependent heuristic.
