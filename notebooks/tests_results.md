@@ -239,17 +239,19 @@ df_t1
 
 # 2. F&O 2008 Table 2 -- BSM call: COS vs Carr-Madan (+ Lewis, FrFT)
 
-$S = 100$, $K \in \{80, 100, 120\}$, $r = 0.1$, $q = 0$, $T = 0.1$, $\sigma = 0.25$. Lewis = single-integral inversion at $u + i/2$; FrFT = Bailey-Swarztrauber FrFT (decouples freq grid from strike grid); Carr-Madan = damped FFT with spline.
+$S = 100$, $K \in \{80, 100, 120\}$, $r = 0.1$, $q = 0$, $T = 0.1$, $\sigma = 0.25$. Carr-Madan uses the paper's stated Fourier truncation range $[0,100]$, so the frequency spacing is $\eta = 100/N$.
+
+The low-$N$ Fourier methods can still be rough because their FFT/quadrature grids are too coarse. That is the point of the comparison: COS reaches high accuracy with many fewer terms.
 
 ```python
 from cos_pricing.carr_madan import carr_madan_price
+from cos_pricing.lewis import lewis_price
 
 sig, r, q, T, S = 0.25, 0.1, 0.0, 0.1, 100.0
 strikes_t2 = np.array([80.0, 100.0, 120.0])
 ref_t2     = bsm_price(strikes_t2, S, sig, T, r, q, cp=+1)
 
 m_cos  = BsmCos (sigma=sig, intr=r, divr=q)
-m_fft  = pf.BsmFft(sigma=sig, intr=r, divr=q)   # Lewis (Simpson)
 m_frft = BsmFrft(sigma=sig, intr=r, divr=q)     # FrFT
 fwd2   = S * np.exp((r - q) * T)
 df2    = np.exp(-r * T)
@@ -260,13 +262,15 @@ for N in [32, 64, 128, 256, 512]:
     m_cos.n_cos = N
     cos_e, cos_ms = bench(lambda: m_cos.price(strikes_t2, S, T, cp=+1), ref_t2)
 
-    m_fft.n_x = N
-    lw_e, lw_ms = bench(lambda: m_fft.price(strikes_t2, S, T, cp=+1), ref_t2)
+    lw_e, lw_ms = bench(lambda: lewis_price(cf_bsm, T, strikes_t2, fwd2, df2, cp=+1, n_quad=N), ref_t2)
 
     m_frft.n_frft, m_frft.eta_frft, m_frft.lambda_frft = N, 100.0 / N, 0.005
     fr_e, fr_ms = bench(lambda: m_frft.price_frft(strikes_t2, S, T, cp=+1), ref_t2)
 
-    cm_e, cm_ms = bench(lambda: carr_madan_price(cf_bsm, T, strikes_t2, fwd2, df2, cp=+1, N=N), ref_t2)
+    cm_e, cm_ms = bench(
+        lambda: carr_madan_price(cf_bsm, T, strikes_t2, fwd2, df2, cp=+1, N=N, eta_grid=100.0 / N),
+        ref_t2,
+    )
 
     rows.append((N, cos_e, cos_ms, lw_e, lw_ms, fr_e, fr_ms, cm_e, cm_ms))
 
@@ -280,12 +284,12 @@ err_cols, ms_cols = ["COS err", "Lewis err", "FrFT err", "CM err"], ["COS ms", "
 
 fig, (a1, a2) = plt.subplots(1, 2, figsize=(12, 4))
 for (lbl, st, col), ec, mc in zip(methods, err_cols, ms_cols):
-    a1.semilogy(df_t2["N"], df_t2[ec], st, label=lbl, color=col)
+    a1.semilogy(df_t2["N"], plot_values(df_t2[ec], ec), st, label=lbl, color=col)
     a2.plot    (df_t2["N"], df_t2[mc], st, label=lbl, color=col)
 a1.set(xlabel="N", ylabel="max |err|", title="Error vs N"); a1.grid(True, which="both", alpha=0.3); a1.legend()
 a2.set(xlabel="N", ylabel="ms / call", title="Runtime vs N"); a2.grid(True, alpha=0.3); a2.legend()
-fig.suptitle("Table 2 -- BSM: four pyfeng Fourier pricers", y=1.02); fig.tight_layout(); plt.show()
-df_t2
+fig.suptitle("Table 2 -- BSM: four Fourier pricers", y=1.02); fig.tight_layout(); plt.show()
+display_error_table(df_t2)
 ```
 
 ![output](tests_results_assets/cell_6_output_0.png)
@@ -324,61 +328,61 @@ df_t2
       <th>0</th>
       <td>32</td>
       <td>2.04556e-05</td>
-      <td>0.0819904</td>
-      <td>191.441</td>
-      <td>0.0241569</td>
+      <td>0.0641819</td>
+      <td>4.16003</td>
+      <td>0.0730152</td>
       <td>11.6747</td>
-      <td>0.123915</td>
-      <td>5.91521e+10</td>
-      <td>0.0973142</td>
+      <td>0.112499</td>
+      <td>11.6837</td>
+      <td>0.0889879</td>
     </tr>
     <tr>
       <th>1</th>
       <td>64</td>
-      <td>1.42109e-14</td>
-      <td>0.0767323</td>
-      <td>56.6938</td>
-      <td>0.0266673</td>
+      <td>&lt; 2e-14</td>
+      <td>0.0631617</td>
+      <td>0.0152252</td>
+      <td>0.131815</td>
       <td>1.94114</td>
-      <td>0.135133</td>
-      <td>51.8763</td>
-      <td>0.0980052</td>
+      <td>0.112191</td>
+      <td>1.89294</td>
+      <td>0.0909135</td>
     </tr>
     <tr>
       <th>2</th>
       <td>128</td>
-      <td>1.42109e-14</td>
-      <td>0.0772244</td>
-      <td>3.01359</td>
-      <td>0.0308615</td>
+      <td>&lt; 2e-14</td>
+      <td>0.072434</td>
+      <td>3.52919e-06</td>
+      <td>0.392865</td>
       <td>1.37346</td>
-      <td>0.140313</td>
-      <td>4.38403</td>
-      <td>0.114152</td>
+      <td>0.128615</td>
+      <td>1.37366</td>
+      <td>0.0977637</td>
     </tr>
     <tr>
       <th>3</th>
       <td>256</td>
-      <td>1.42109e-14</td>
-      <td>0.0977148</td>
-      <td>5.94979</td>
-      <td>0.0435679</td>
+      <td>&lt; 2e-14</td>
+      <td>0.0940535</td>
+      <td>3.90014e-10</td>
+      <td>1.42199</td>
       <td>0.0794379</td>
-      <td>0.434501</td>
-      <td>2.21434</td>
-      <td>0.108812</td>
+      <td>0.134605</td>
+      <td>0.0805857</td>
+      <td>0.10368</td>
     </tr>
     <tr>
       <th>4</th>
       <td>512</td>
-      <td>1.42109e-14</td>
-      <td>0.150088</td>
-      <td>1.23783</td>
-      <td>0.06289</td>
+      <td>&lt; 2e-14</td>
+      <td>0.125888</td>
+      <td>2.0811e-10</td>
+      <td>5.57514</td>
       <td>0.000192206</td>
-      <td>0.174807</td>
-      <td>0.139138</td>
-      <td>0.12316</td>
+      <td>0.170906</td>
+      <td>0.00135015</td>
+      <td>0.120743</td>
     </tr>
   </tbody>
 </table>
@@ -488,7 +492,9 @@ df_t3
 
 # 4. F&O 2008 Tables 4-5 -- Heston, $T=1$ and $T=10$
 
-Eq. 55 parameters, $r = q = 0$, $K = 100$. Three Fourier pricers benched against the same Heston CF: COS uses $N \in [40, 200]$; Lewis and Carr-Madan need much larger grids ($N \in [512, 8192]$). References $C_{T=1} = 5.785155435$, $C_{T=10} = 22.31894579$ from F&O 2008.
+Eq. 52 parameters, $r = q = 0$, $K = 100$. COS and the transform methods use different grids, as in the paper: COS is tested on small $N$, while Lewis/Carr-Madan are tested on larger Fourier grids. Carr-Madan uses the paper's Fourier-domain truncations: $[0,1200]$ for $T=1$ and $[0,500]$ for $T=10$.
+
+References: $C_{T=1} = 5.785155435$, $C_{T=10} = 22.31894579$ from F&O 2008.
 
 ```python
 from cos_pricing.carr_madan import carr_madan_price
@@ -497,11 +503,21 @@ PAPER  = dict(sigma=0.0175, vov=0.5751, mr=1.5768, theta=0.0398,
                rho=-0.5711, intr=0.0, divr=0.0)
 S0, K  = 100.0, 100.0
 REFS   = {1.0: 5.785155435, 10.0: 22.318945791474590}
-N_ALL  = [32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]
+N_COS_H = {1.0: [40, 80, 120, 160, 200], 10.0: [40, 65, 90, 115, 140]}
+N_FFT_H = [512, 1024, 2048, 4096, 8192]
+CM_VMAX_H = {1.0: 1200.0, 10.0: 500.0}
 
 m_cos = HestonCos(**PAPER)             # COS
-m_lw  = pf.HestonFft(**PAPER)          # Lewis (Simpson on u + i/2)
+m_lw  = pf.HestonFft(**PAPER)          # Lewis/FFT diagnostic from PyFENG
 m_cf  = HestonCos(**PAPER)             # pyfeng's charfunc_logprice is already in log(S/F)
+
+def _method_table(named_frames, err_name="err"):
+    frames = []
+    for name, df in named_frames:
+        frame = df.copy()
+        frame.insert(0, "method", name)
+        frames.append(frame)
+    return pd.concat(frames, ignore_index=True).set_index(["method", "N"])
 
 def heston_sweep(T):
     ref = REFS[T]
@@ -510,16 +526,20 @@ def heston_sweep(T):
     cf  = lambda u: m_cf.charfunc_logprice(u, T)
 
     rows_cos, rows_lw, rows_cm = [], [], []
-    for N in N_ALL:
+    for N in N_COS_H[T]:
         m_cos.n_cos = N
         e, ms = bench(lambda: m_cos.price(K, S0, T, cp=+1), ref)
         rows_cos.append((N, e, ms))
 
+    for N in N_FFT_H:
         m_lw.n_x = N
         e, ms = bench(lambda: m_lw.price(K, S0, T, cp=+1), ref)
         rows_lw.append((N, e, ms))
 
-        e, ms = bench(lambda: carr_madan_price(cf, T, K, fwd, df, cp=+1, N=N), ref)
+        e, ms = bench(
+            lambda: carr_madan_price(cf, T, K, fwd, df, cp=+1, N=N, eta_grid=CM_VMAX_H[T] / N),
+            ref,
+        )
         rows_cm.append((N, e, ms))
     return (pd.DataFrame(rows_cos, columns=["N", "err", "ms"]),
             pd.DataFrame(rows_lw,  columns=["N", "err", "ms"]),
@@ -532,17 +552,17 @@ fig, axs = plt.subplots(2, 2, figsize=(13, 7))
 for col, (T, dfs) in enumerate([(1.0, (t4_cos, t4_lw, t4_cm)), (10.0, (t5_cos, t5_lw, t5_cm))]):
     cos_d, lw_d, cm_d = dfs
     for ax, ycol, ylabel in [(axs[0, col], "err", "|err|"), (axs[1, col], "ms", "ms / call")]:
-        ax.loglog(cos_d["N"], cos_d[ycol], "o-", label="COS",        color="#1f77b4")
-        ax.loglog(lw_d ["N"], lw_d [ycol], "^-", label="Lewis",      color="#2ca02c")
-        ax.loglog(cm_d ["N"], cm_d [ycol], "s-", label="Carr-Madan", color="#ff7f0e")
+        ax.loglog(cos_d["N"], plot_values(cos_d[ycol], ycol), "o-", label="COS",        color="#1f77b4")
+        ax.loglog(lw_d ["N"], plot_values(lw_d [ycol], ycol), "^-", label="Lewis",      color="#2ca02c")
+        ax.loglog(cm_d ["N"], plot_values(cm_d [ycol], ycol), "s-", label="Carr-Madan", color="#ff7f0e")
         ax.set(xlabel="N", ylabel=ylabel, title=f"Table {4 if T==1.0 else 5} -- T={T:g}, {ylabel}")
         ax.grid(True, which="both", alpha=0.3); ax.legend()
 fig.tight_layout(); plt.show()
 
 print("Table 4 (T=1):")
-display(pd.concat({"COS": t4_cos.set_index("N"), "Lewis": t4_lw.set_index("N"), "CM": t4_cm.set_index("N")}, axis=1))
+display_error_table(_method_table([("COS", t4_cos), ("Lewis", t4_lw), ("CM", t4_cm)]))
 print("Table 5 (T=10):")
-pd.concat({"COS": t5_cos.set_index("N"), "Lewis": t5_lw.set_index("N"), "CM": t5_cm.set_index("N")}, axis=1)
+display_error_table(_method_table([("COS", t5_cos), ("Lewis", t5_lw), ("CM", t5_cm)]))
 ```
 
 ![output](tests_results_assets/cell_10_output_0.png)
@@ -561,122 +581,103 @@ Table 4 (T=1):
         vertical-align: top;
     }
 
-    .dataframe thead tr th {
-        text-align: left;
-    }
-
-    .dataframe thead tr:last-of-type th {
+    .dataframe thead th {
         text-align: right;
     }
 </style>
 <table border="1" class="dataframe">
   <thead>
-    <tr>
+    <tr style="text-align: right;">
       <th></th>
-      <th colspan="2" halign="left">COS</th>
-      <th colspan="2" halign="left">Lewis</th>
-      <th colspan="2" halign="left">CM</th>
-    </tr>
-    <tr>
       <th></th>
-      <th>err</th>
-      <th>ms</th>
-      <th>err</th>
-      <th>ms</th>
       <th>err</th>
       <th>ms</th>
     </tr>
     <tr>
+      <th>method</th>
       <th>N</th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
       <th></th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>32</th>
-      <td>0.0536316</td>
-      <td>0.0119915</td>
-      <td>175.064</td>
-      <td>0.032735</td>
-      <td>7.40282</td>
-      <td>0.119856</td>
+      <th rowspan="5" valign="top">COS</th>
+      <th>40</th>
+      <td>0.0134213</td>
+      <td>0.0142335</td>
     </tr>
     <tr>
-      <th>64</th>
-      <td>0.000578452</td>
-      <td>0.0145263</td>
-      <td>51.8272</td>
-      <td>0.0308902</td>
-      <td>4.10596</td>
-      <td>0.109756</td>
+      <th>80</th>
+      <td>0.000134617</td>
+      <td>0.0225806</td>
     </tr>
     <tr>
-      <th>128</th>
-      <td>5.35818e-07</td>
-      <td>0.0208225</td>
-      <td>2.75461</td>
-      <td>0.033754</td>
-      <td>1.19877</td>
-      <td>0.114056</td>
+      <th>120</th>
+      <td>1.68462e-06</td>
+      <td>0.0206023</td>
     </tr>
     <tr>
-      <th>256</th>
-      <td>2.3184e-09</td>
-      <td>0.0341958</td>
-      <td>5.43841</td>
-      <td>0.0429129</td>
-      <td>0.109768</td>
-      <td>0.126441</td>
+      <th>160</th>
+      <td>4.60891e-08</td>
+      <td>0.0241615</td>
     </tr>
     <tr>
+      <th>200</th>
+      <td>4.36043e-10</td>
+      <td>0.0319752</td>
+    </tr>
+    <tr>
+      <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
-      <td>2.30157e-09</td>
-      <td>0.0627819</td>
       <td>1.13144</td>
-      <td>0.0618148</td>
-      <td>0.0146635</td>
-      <td>0.178231</td>
+      <td>0.0633754</td>
     </tr>
     <tr>
       <th>1024</th>
-      <td>2.30157e-09</td>
-      <td>0.120089</td>
       <td>0.0214134</td>
-      <td>0.134677</td>
-      <td>0.000174845</td>
-      <td>0.24996</td>
+      <td>0.0906056</td>
     </tr>
     <tr>
       <th>2048</th>
-      <td>2.30157e-09</td>
-      <td>0.2408</td>
       <td>6.89068e-06</td>
-      <td>0.719175</td>
-      <td>1.50652e-07</td>
-      <td>0.392535</td>
+      <td>0.156151</td>
     </tr>
     <tr>
       <th>4096</th>
-      <td>2.30157e-09</td>
-      <td>0.483221</td>
       <td>6.24167e-10</td>
-      <td>0.331611</td>
-      <td>6.24205e-10</td>
-      <td>0.682375</td>
+      <td>0.302807</td>
     </tr>
     <tr>
       <th>8192</th>
-      <td>2.30157e-09</td>
-      <td>0.994978</td>
       <td>6.24867e-10</td>
-      <td>0.579492</td>
-      <td>6.23745e-10</td>
-      <td>0.974203</td>
+      <td>0.574422</td>
+    </tr>
+    <tr>
+      <th rowspan="5" valign="top">CM</th>
+      <th>512</th>
+      <td>3.67341</td>
+      <td>0.158655</td>
+    </tr>
+    <tr>
+      <th>1024</th>
+      <td>2.42182</td>
+      <td>0.2081</td>
+    </tr>
+    <tr>
+      <th>2048</th>
+      <td>0.562918</td>
+      <td>0.650496</td>
+    </tr>
+    <tr>
+      <th>4096</th>
+      <td>0.0107065</td>
+      <td>0.525609</td>
+    </tr>
+    <tr>
+      <th>8192</th>
+      <td>3.44628e-06</td>
+      <td>0.999566</td>
     </tr>
   </tbody>
 </table>
@@ -696,122 +697,103 @@ Table 5 (T=10):
         vertical-align: top;
     }
 
-    .dataframe thead tr th {
-        text-align: left;
-    }
-
-    .dataframe thead tr:last-of-type th {
+    .dataframe thead th {
         text-align: right;
     }
 </style>
 <table border="1" class="dataframe">
   <thead>
-    <tr>
+    <tr style="text-align: right;">
       <th></th>
-      <th colspan="2" halign="left">COS</th>
-      <th colspan="2" halign="left">Lewis</th>
-      <th colspan="2" halign="left">CM</th>
-    </tr>
-    <tr>
       <th></th>
-      <th>err</th>
-      <th>ms</th>
-      <th>err</th>
-      <th>ms</th>
       <th>err</th>
       <th>ms</th>
     </tr>
     <tr>
+      <th>method</th>
       <th>N</th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
       <th></th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>32</th>
-      <td>2.60817</td>
-      <td>0.0112806</td>
-      <td>176.22</td>
-      <td>0.0306283</td>
-      <td>2.26448</td>
-      <td>0.108617</td>
+      <th rowspan="5" valign="top">COS</th>
+      <th>40</th>
+      <td>0.322909</td>
+      <td>0.0126333</td>
     </tr>
     <tr>
-      <th>64</th>
-      <td>0.000516033</td>
-      <td>0.0146694</td>
-      <td>52.5011</td>
-      <td>0.0340735</td>
-      <td>0.741227</td>
-      <td>0.1096</td>
+      <th>65</th>
+      <td>0.0013988</td>
+      <td>0.015245</td>
     </tr>
     <tr>
-      <th>128</th>
-      <td>2.59732e-10</td>
-      <td>0.0212571</td>
-      <td>2.83155</td>
-      <td>0.0376452</td>
-      <td>0.0271101</td>
-      <td>0.113696</td>
+      <th>90</th>
+      <td>5.9599e-06</td>
+      <td>0.018189</td>
     </tr>
     <tr>
-      <th>256</th>
-      <td>8.05532e-10</td>
-      <td>0.0370508</td>
-      <td>5.43763</td>
-      <td>0.0419933</td>
-      <td>1.14855e-05</td>
-      <td>0.129931</td>
+      <th>115</th>
+      <td>2.55972e-08</td>
+      <td>0.0240021</td>
     </tr>
     <tr>
+      <th>140</th>
+      <td>9.2631e-10</td>
+      <td>0.0238017</td>
+    </tr>
+    <tr>
+      <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
-      <td>8.05532e-10</td>
-      <td>0.0624708</td>
       <td>1.13144</td>
-      <td>0.0615246</td>
-      <td>4.53451e-10</td>
-      <td>0.158989</td>
+      <td>0.0615992</td>
     </tr>
     <tr>
       <th>1024</th>
-      <td>8.05532e-10</td>
-      <td>0.118942</td>
       <td>0.0214134</td>
-      <td>0.0920271</td>
-      <td>3.20053e-10</td>
-      <td>0.210385</td>
+      <td>0.090289</td>
     </tr>
     <tr>
       <th>2048</th>
-      <td>8.05532e-10</td>
-      <td>0.231067</td>
       <td>6.89099e-06</td>
-      <td>0.159197</td>
-      <td>3.20053e-10</td>
-      <td>0.318967</td>
+      <td>0.156371</td>
     </tr>
     <tr>
       <th>4096</th>
-      <td>8.05532e-10</td>
-      <td>0.449339</td>
       <td>3.19403e-10</td>
-      <td>0.285357</td>
-      <td>3.20053e-10</td>
-      <td>0.553759</td>
+      <td>0.29818</td>
     </tr>
     <tr>
       <th>8192</th>
-      <td>8.05532e-10</td>
-      <td>0.878845</td>
       <td>3.20082e-10</td>
-      <td>0.551603</td>
-      <td>3.20053e-10</td>
-      <td>0.96817</td>
+      <td>0.59876</td>
+    </tr>
+    <tr>
+      <th rowspan="5" valign="top">CM</th>
+      <th>512</th>
+      <td>2.08276</td>
+      <td>0.158906</td>
+    </tr>
+    <tr>
+      <th>1024</th>
+      <td>0.260573</td>
+      <td>0.206476</td>
+    </tr>
+    <tr>
+      <th>2048</th>
+      <td>0.00214501</td>
+      <td>0.310854</td>
+    </tr>
+    <tr>
+      <th>4096</th>
+      <td>1.38406e-07</td>
+      <td>0.544181</td>
+    </tr>
+    <tr>
+      <th>8192</th>
+      <td>3.20075e-10</td>
+      <td>1.01032</td>
     </tr>
   </tbody>
 </table>
@@ -819,11 +801,14 @@ Table 5 (T=10):
 
 # 5. F&O 2008 Table 6 -- Heston, $T = 1$, 21 strikes
 
-Same Eq. 55 setup, but priced on $K \in \{80, 82, 84, \ldots, 120\}$ and reporting `max |err|` over the 21-strike grid. Reference values computed at COS $N = 8192$.
+Same Eq. 52 setup, but priced on the paper's 21-strike grid $K \in \{50, 55, 60, \ldots, 150\}$ and reporting `max |err|`. The paper uses separate grids: COS uses small $N$, while Carr-Madan uses larger FFT grids, so we display the methods in a long table instead of forcing mismatched `N` values into one row.
 
 ```python
-K21 = np.arange(80.0, 121.0, 2.0)
+K21 = np.arange(50.0, 151.0, 5.0)
 T   = 1.0
+N_COS_6 = [40, 80, 160, 200]
+N_FFT_6 = [1024, 2048, 4096, 8192]
+CM_VMAX_6 = 1200.0
 
 m_ref = HestonCos(**PAPER); m_ref.n_cos = 8192
 ref21 = m_ref.price(K21, S0, T, cp=+1)
@@ -833,16 +818,20 @@ df  = np.exp(-PAPER["intr"] * T)
 cf  = lambda u: m_cf.charfunc_logprice(u, T)
 
 rows_cos, rows_lw, rows_cm = [], [], []
-for N in N_ALL:
+for N in N_COS_6:
     m_cos.n_cos = N
     e, ms = bench(lambda: m_cos.price(K21, S0, T, cp=+1), ref21)
     rows_cos.append((N, e, ms))
 
+for N in N_FFT_6:
     m_lw.n_x = N
     e, ms = bench(lambda: m_lw.price(K21, S0, T, cp=+1), ref21)
     rows_lw.append((N, e, ms))
 
-    e, ms = bench(lambda: carr_madan_price(cf, T, K21, fwd, df, cp=+1, N=N), ref21)
+    e, ms = bench(
+        lambda: carr_madan_price(cf, T, K21, fwd, df, cp=+1, N=N, eta_grid=CM_VMAX_6 / N),
+        ref21,
+    )
     rows_cm.append((N, e, ms))
 
 t6_cos = pd.DataFrame(rows_cos, columns=["N", "max |err|", "ms"])
@@ -858,7 +847,7 @@ for ax, ycol, ylabel in [(a1, "max |err|", "max |err|"), (a2, "ms", "ms / call")
     ax.grid(True, which="both", alpha=0.3); ax.legend()
 fig.tight_layout(); plt.show()
 
-display_error_table(pd.concat({"COS": t6_cos.set_index("N"), "Lewis": t6_lw.set_index("N"), "CM": t6_cm.set_index("N")}, axis=1))
+display_error_table(_method_table([("COS", t6_cos), ("Lewis", t6_lw), ("CM", t6_cm)]))
 ```
 
 ![output](tests_results_assets/cell_12_output_0.png)
@@ -873,122 +862,88 @@ display_error_table(pd.concat({"COS": t6_cos.set_index("N"), "Lewis": t6_lw.set_
         vertical-align: top;
     }
 
-    .dataframe thead tr th {
-        text-align: left;
-    }
-
-    .dataframe thead tr:last-of-type th {
+    .dataframe thead th {
         text-align: right;
     }
 </style>
 <table border="1" class="dataframe">
   <thead>
-    <tr>
+    <tr style="text-align: right;">
       <th></th>
-      <th colspan="2" halign="left">COS</th>
-      <th colspan="2" halign="left">Lewis</th>
-      <th colspan="2" halign="left">CM</th>
-    </tr>
-    <tr>
       <th></th>
-      <th>max |err|</th>
-      <th>ms</th>
-      <th>max |err|</th>
-      <th>ms</th>
       <th>max |err|</th>
       <th>ms</th>
     </tr>
     <tr>
+      <th>method</th>
       <th>N</th>
-      <th></th>
-      <th></th>
-      <th></th>
-      <th></th>
       <th></th>
       <th></th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <th>32</th>
-      <td>0.0934449</td>
-      <td>0.0182894</td>
-      <td>192.719</td>
-      <td>0.0417335</td>
-      <td>5.84181e+10</td>
-      <td>0.105311</td>
+      <th rowspan="4" valign="top">COS</th>
+      <th>40</th>
+      <td>0.0192133</td>
+      <td>0.0198269</td>
     </tr>
     <tr>
-      <th>64</th>
-      <td>0.00250001</td>
-      <td>0.0258525</td>
-      <td>57.021</td>
-      <td>0.056544</td>
-      <td>55.1855</td>
-      <td>0.106127</td>
+      <th>80</th>
+      <td>0.000320936</td>
+      <td>0.0292856</td>
     </tr>
     <tr>
-      <th>128</th>
-      <td>3.08771e-06</td>
-      <td>0.0413152</td>
-      <td>3.03012</td>
-      <td>0.320029</td>
-      <td>4.02165</td>
-      <td>0.13626</td>
+      <th>160</th>
+      <td>1.90881e-07</td>
+      <td>0.0499877</td>
     </tr>
     <tr>
-      <th>256</th>
-      <td>3.55311e-11</td>
-      <td>0.07696</td>
-      <td>5.98226</td>
-      <td>0.130469</td>
-      <td>1.88986</td>
-      <td>0.132129</td>
+      <th>200</th>
+      <td>4.66808e-09</td>
+      <td>0.0586238</td>
     </tr>
     <tr>
-      <th>512</th>
-      <td>&lt; 2e-14</td>
-      <td>0.139014</td>
-      <td>1.24459</td>
-      <td>0.233095</td>
-      <td>0.488531</td>
-      <td>0.160327</td>
-    </tr>
-    <tr>
+      <th rowspan="4" valign="top">Lewis</th>
       <th>1024</th>
-      <td>&lt; 2e-14</td>
-      <td>0.272057</td>
-      <td>0.0235548</td>
-      <td>0.41206</td>
-      <td>0.0939059</td>
-      <td>0.211964</td>
+      <td>0.0267668</td>
+      <td>0.430617</td>
     </tr>
     <tr>
       <th>2048</th>
-      <td>&lt; 2e-14</td>
-      <td>0.517097</td>
-      <td>7.57896e-06</td>
-      <td>0.8074</td>
-      <td>0.00359172</td>
-      <td>0.317924</td>
+      <td>8.6135e-06</td>
+      <td>0.820725</td>
     </tr>
     <tr>
       <th>4096</th>
-      <td>&lt; 2e-14</td>
-      <td>1.02238</td>
-      <td>6.765e-09</td>
-      <td>1.62959</td>
-      <td>0.000201912</td>
-      <td>0.543499</td>
+      <td>3.94826e-08</td>
+      <td>1.65759</td>
     </tr>
     <tr>
       <th>8192</th>
-      <td>&lt; 2e-14</td>
-      <td>2.02216</td>
-      <td>6.76499e-09</td>
-      <td>3.39291</td>
-      <td>6.47785e-06</td>
-      <td>1.01847</td>
+      <td>3.94833e-08</td>
+      <td>3.36883</td>
+    </tr>
+    <tr>
+      <th rowspan="4" valign="top">CM</th>
+      <th>1024</th>
+      <td>2.57051</td>
+      <td>0.210789</td>
+    </tr>
+    <tr>
+      <th>2048</th>
+      <td>0.56432</td>
+      <td>0.314837</td>
+    </tr>
+    <tr>
+      <th>4096</th>
+      <td>0.0107066</td>
+      <td>0.548104</td>
+    </tr>
+    <tr>
+      <th>8192</th>
+      <td>3.48521e-06</td>
+      <td>1.01815</td>
     </tr>
   </tbody>
 </table>
@@ -1181,7 +1136,7 @@ $S = K = 100$, $T = 1$, $r = 0.1$, $q = 0$, $C = 1$, $G = M = 5$. Larger $Y$ mea
 
 Tables 8 and 9 are COS paper-grid checks against the printed Fang-Oosterlee references. The paper compares COS to CONV; this notebook also shows a Carr-Madan diagnostic because CONV is not implemented in the repo.
 
-Table 10 is a caveat case. With $Y = 1.98$ and the paper's stated range $[-100,20]$, our strict martingale CGMY implementation gives a high-$N$ price around `0.2601`, while the paper prints `0.252104475`. The README and Q&A note this likely reflects an unpublished/wider bound or implementation convention in the original paper, so we show the mismatch explicitly instead of hiding it.
+Table 10 is **not** treated as a successful reproduction. With $Y = 1.98$ and the paper's stated range $[-100,20]$, our strict martingale CGMY implementation gives a high-$N$ price around `0.2601`, while the paper prints `0.252104475`. The very large low-$N$ error is a symptom of this unresolved range/implementation-convention mismatch, not evidence that COS failed in Tables 8-9. We show it as a caveat and omit the Carr-Madan overflow diagnostic for this case.
 
 ```python
 S0_c, K_c, T_c, r_c, q_c = 100.0, 100.0, 1.0, 0.1, 0.0
@@ -1227,9 +1182,10 @@ def cgmy_paper_grid(Y):
         cos_p.n_cos = N
         e, ms = bench(lambda: cos_p.price(K_c, S0_c, T_c, cp=+1), paper_ref)
         rows_cos.append((N, e, paper_err, ms))
-    for N in N_FFT_C:
-        e, ms = bench(lambda: carr_madan_price(cf, T_c, K_c, fwd_c, df_c, cp=+1, N=N), paper_ref)
-        rows_cm.append((N, e, ms))
+    if not np.isclose(Y, 1.98):
+        for N in N_FFT_C:
+            e, ms = bench(lambda: carr_madan_price(cf, T_c, K_c, fwd_c, df_c, cp=+1, N=N), paper_ref)
+            rows_cm.append((N, e, ms))
     return (
         paper_ref,
         internal_ref,
@@ -1247,9 +1203,13 @@ for Y, cfg in PAPER_CGMY.items():
     a1.set(xlabel="N", ylabel="|err|", title="COS error vs paper grid")
     a1.grid(True, which="both", alpha=0.3); a1.legend()
 
-    a2.loglog(cm_d["N"], plot_values(cm_d["Carr-Madan |err|"], "Carr-Madan |err|"), "s-", label="Carr-Madan", color="#ff7f0e")
-    a2.set(xlabel="N", ylabel="|err|", title="Carr-Madan diagnostic")
-    a2.grid(True, which="both", alpha=0.3); a2.legend()
+    if cm_d.empty:
+        a2.text(0.5, 0.5, "Carr-Madan omitted:\ndamped FFT overflows here", ha="center", va="center", transform=a2.transAxes)
+        a2.set_axis_off()
+    else:
+        a2.loglog(cm_d["N"], plot_values(cm_d["Carr-Madan |err|"], "Carr-Madan |err|"), "s-", label="Carr-Madan", color="#ff7f0e")
+        a2.set(xlabel="N", ylabel="|err|", title="Carr-Madan diagnostic")
+        a2.grid(True, which="both", alpha=0.3); a2.legend()
 
     fig.suptitle(
         f"Table {cfg['table']} -- CGMY Y={Y}  (paper ref = {paper_ref:.10f}, internal COS ref = {internal_ref:.10f})",
@@ -1264,8 +1224,11 @@ for Y, cfg in PAPER_CGMY.items():
     print(f"internal COS ref:  {internal_ref:.10f}")
     print("COS paper grid")
     display_error_table(cos_d.set_index("N"))
-    print("Carr-Madan diagnostic vs paper ref")
-    display_error_table(cm_d.set_index("N"))
+    if cm_d.empty:
+        print("Carr-Madan diagnostic omitted for Y=1.98: damped FFT overflows/unstable here.")
+    else:
+        print("Carr-Madan diagnostic vs paper ref")
+        display_error_table(cm_d.set_index("N"))
 ```
 
 ![output](tests_results_assets/cell_16_output_0.png)
@@ -1315,37 +1278,37 @@ COS paper grid
       <th>40</th>
       <td>0.00579334</td>
       <td>0.0382</td>
-      <td>0.0624375</td>
+      <td>0.0623379</td>
     </tr>
     <tr>
       <th>60</th>
       <td>0.000491393</td>
       <td>0.000687</td>
-      <td>0.0637998</td>
+      <td>0.0618967</td>
     </tr>
     <tr>
       <th>80</th>
       <td>2.26116e-05</td>
       <td>2.11e-05</td>
-      <td>0.0677198</td>
+      <td>0.0670106</td>
     </tr>
     <tr>
       <th>100</th>
       <td>1.113e-06</td>
       <td>9.45e-07</td>
-      <td>0.0697288</td>
+      <td>0.0706077</td>
     </tr>
     <tr>
       <th>120</th>
       <td>7.80023e-08</td>
       <td>5.56e-08</td>
-      <td>0.0723242</td>
+      <td>0.0717679</td>
     </tr>
     <tr>
       <th>140</th>
       <td>2.68786e-08</td>
       <td>4.04e-09</td>
-      <td>0.0757983</td>
+      <td>0.0768915</td>
     </tr>
   </tbody>
 </table>
@@ -1386,32 +1349,32 @@ Carr-Madan diagnostic vs paper ref
     <tr>
       <th>512</th>
       <td>0.00837348</td>
-      <td>0.809742</td>
+      <td>0.16707</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.000288182</td>
-      <td>0.397557</td>
+      <td>0.232085</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>2.61792e-05</td>
-      <td>0.415623</td>
+      <td>0.361055</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>9.50286e-07</td>
-      <td>0.652304</td>
+      <td>0.667788</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.75376e-07</td>
-      <td>1.1997</td>
+      <td>1.24109</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>7.26305e-08</td>
-      <td>2.73201</td>
+      <td>2.42256</td>
     </tr>
   </tbody>
 </table>
@@ -1458,37 +1421,37 @@ COS paper grid
       <th>40</th>
       <td>1.25469</td>
       <td>1.38</td>
-      <td>0.0595035</td>
+      <td>0.0671871</td>
     </tr>
     <tr>
       <th>45</th>
       <td>0.0353538</td>
       <td>0.0198</td>
-      <td>0.0620329</td>
+      <td>0.0665737</td>
     </tr>
     <tr>
       <th>50</th>
       <td>0.000121552</td>
       <td>0.000452</td>
-      <td>0.0629742</td>
+      <td>0.0699725</td>
     </tr>
     <tr>
       <th>55</th>
       <td>1.06786e-05</td>
       <td>9.59e-06</td>
-      <td>0.0635252</td>
+      <td>0.0688262</td>
     </tr>
     <tr>
       <th>60</th>
       <td>2.38234e-07</td>
       <td>1.22e-09</td>
-      <td>0.0628633</td>
+      <td>0.0677258</td>
     </tr>
     <tr>
       <th>65</th>
       <td>1.68385e-07</td>
       <td>7.53e-10</td>
-      <td>0.0651154</td>
+      <td>0.0686677</td>
     </tr>
   </tbody>
 </table>
@@ -1529,32 +1492,32 @@ Carr-Madan diagnostic vs paper ref
     <tr>
       <th>512</th>
       <td>4.54271e-05</td>
-      <td>0.169157</td>
+      <td>0.195036</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>3.67881e-07</td>
-      <td>0.252803</td>
+      <td>0.259004</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>3.76542e-08</td>
-      <td>0.390985</td>
+      <td>0.431249</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>1.57435e-07</td>
-      <td>0.656717</td>
+      <td>0.69416</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.62924e-07</td>
-      <td>1.23348</td>
+      <td>1.70219</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>1.63523e-07</td>
-      <td>2.40127</td>
+      <td>3.05792</td>
     </tr>
   </tbody>
 </table>
@@ -1601,101 +1564,39 @@ COS paper grid
       <th>20</th>
       <td>403.716</td>
       <td>0.0417</td>
-      <td>0.0585979</td>
+      <td>0.0676208</td>
     </tr>
     <tr>
       <th>25</th>
       <td>0.536674</td>
       <td>0.515</td>
-      <td>0.0572967</td>
+      <td>0.0674687</td>
     </tr>
     <tr>
       <th>30</th>
       <td>0.00806645</td>
       <td>6.54e-05</td>
-      <td>0.059486</td>
+      <td>0.0683296</td>
     </tr>
     <tr>
       <th>35</th>
       <td>0.00799418</td>
       <td>1.1e-09</td>
-      <td>0.059274</td>
+      <td>0.0644173</td>
     </tr>
     <tr>
       <th>40</th>
       <td>0.00799418</td>
       <td>&lt; 2e-14</td>
-      <td>0.0592106</td>
+      <td>0.0662842</td>
     </tr>
   </tbody>
 </table>
 </div>
 
 ```text
-Carr-Madan diagnostic vs paper ref
+Carr-Madan diagnostic omitted for Y=1.98: damped FFT overflows/unstable here.
 ```
-
-<div>
-<style scoped>
-    .dataframe tbody tr th:only-of-type {
-        vertical-align: middle;
-    }
-
-    .dataframe tbody tr th {
-        vertical-align: top;
-    }
-
-    .dataframe thead th {
-        text-align: right;
-    }
-</style>
-<table border="1" class="dataframe">
-  <thead>
-    <tr style="text-align: right;">
-      <th></th>
-      <th>Carr-Madan |err|</th>
-      <th>ms</th>
-    </tr>
-    <tr>
-      <th>N</th>
-      <th></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <th>512</th>
-      <td>4.89529e+27</td>
-      <td>0.168827</td>
-    </tr>
-    <tr>
-      <th>1024</th>
-      <td>4.89531e+27</td>
-      <td>0.237013</td>
-    </tr>
-    <tr>
-      <th>2048</th>
-      <td>4.89531e+27</td>
-      <td>0.371374</td>
-    </tr>
-    <tr>
-      <th>4096</th>
-      <td>4.89531e+27</td>
-      <td>0.641383</td>
-    </tr>
-    <tr>
-      <th>8192</th>
-      <td>4.89531e+27</td>
-      <td>1.20656</td>
-    </tr>
-    <tr>
-      <th>16384</th>
-      <td>4.89531e+27</td>
-      <td>2.43124</td>
-    </tr>
-  </tbody>
-</table>
-</div>
 
 ## Dimensional analysis story
 
