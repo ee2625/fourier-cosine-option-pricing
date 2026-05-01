@@ -83,6 +83,8 @@ When a residual is displayed as `< 2e-14`, it means the difference is below this
 
 **Le Floc'h / robust COS context.** Le Floc'h (2020), *More Robust Pricing of European Options Based on Fourier Cosine Series Expansions*, focuses on making the COS truncation range more robust and less hand-tuned. This matters because the original Fang-Oosterlee range is cumulant-based and partly controlled by a heuristic $L$. For volatility smiles, we want strike-independent ranges and reusable coefficients; Le Floc'h is a practical reference, while Junike-Pankrashkin (2022) gives a sharper error-controlled truncation-range framework.
 
+
+
 ```python
 import os, sys, time
 ROOT = os.path.abspath(os.path.join(os.getcwd(),
@@ -155,13 +157,13 @@ def bench(call_fn, ref, reps=200):
 print("imports OK")
 ```
 
-```text
-imports OK
-```
+    imports OK
+
 
 # 1. F&O 2008 Table 1 -- recovering a density from its CF
 
 Standard normal density on $[-10, 10]$ reconstructed from $N$ cosine coefficients of $\varphi(w) = e^{-w^2/2}$. Errors at $x = \pm 5$.
+
 
 ```python
 def density_recover(N, a=-10.0, b=10.0, x_eval=np.array([-5.0, 5.0])):
@@ -183,7 +185,14 @@ ax.grid(True, which="both", alpha=0.3); fig.tight_layout(); plt.show()
 df_t1
 ```
 
-![output](tests_results_assets/cell_4_output_0.png)
+
+    
+![png](tests_results_files/tests_results_4_0.png)
+    
+
+
+
+
 
 <div>
 <style scoped>
@@ -237,11 +246,14 @@ df_t1
 </table>
 </div>
 
+
+
 # 2. F&O 2008 Table 2 -- BSM call: COS vs Carr-Madan (+ Lewis, FrFT)
 
 $S = 100$, $K \in \{80, 100, 120\}$, $r = 0.1$, $q = 0$, $T = 0.1$, $\sigma = 0.25$. Carr-Madan uses the paper's stated Fourier truncation range $[0,100]$, so the frequency spacing is $\eta = 100/N$.
 
 The low-$N$ Fourier methods can still be rough because their FFT/quadrature grids are too coarse. That is the point of the comparison: COS reaches high accuracy with many fewer terms.
+
 
 ```python
 from cos_pricing.carr_madan import carr_madan_price
@@ -290,9 +302,15 @@ a1.set(xlabel="N", ylabel="max |err|", title="Error vs N"); a1.grid(True, which=
 a2.set(xlabel="N", ylabel="ms / call", title="Runtime vs N"); a2.grid(True, alpha=0.3); a2.legend()
 fig.suptitle("Table 2 -- BSM: four Fourier pricers", y=1.02); fig.tight_layout(); plt.show()
 display_error_table(df_t2)
+
 ```
 
-![output](tests_results_assets/cell_6_output_0.png)
+
+    
+![png](tests_results_files/tests_results_6_0.png)
+    
+
+
 
 <div>
 <style scoped>
@@ -328,69 +346,71 @@ display_error_table(df_t2)
       <th>0</th>
       <td>32</td>
       <td>2.04556e-05</td>
-      <td>0.0641819</td>
+      <td>0.0622838</td>
       <td>4.16003</td>
-      <td>0.0730152</td>
+      <td>0.0689231</td>
       <td>11.6747</td>
-      <td>0.112499</td>
+      <td>0.108163</td>
       <td>11.6837</td>
-      <td>0.0889879</td>
+      <td>0.0968654</td>
     </tr>
     <tr>
       <th>1</th>
       <td>64</td>
       <td>&lt; 2e-14</td>
-      <td>0.0631617</td>
+      <td>0.071265</td>
       <td>0.0152252</td>
-      <td>0.131815</td>
+      <td>0.14165</td>
       <td>1.94114</td>
-      <td>0.112191</td>
+      <td>0.112887</td>
       <td>1.89294</td>
-      <td>0.0909135</td>
+      <td>0.089686</td>
     </tr>
     <tr>
       <th>2</th>
       <td>128</td>
       <td>&lt; 2e-14</td>
-      <td>0.072434</td>
+      <td>0.079891</td>
       <td>3.52919e-06</td>
-      <td>0.392865</td>
+      <td>0.395723</td>
       <td>1.37346</td>
-      <td>0.128615</td>
+      <td>0.136333</td>
       <td>1.37366</td>
-      <td>0.0977637</td>
+      <td>0.0955431</td>
     </tr>
     <tr>
       <th>3</th>
       <td>256</td>
       <td>&lt; 2e-14</td>
-      <td>0.0940535</td>
+      <td>0.0901733</td>
       <td>3.90014e-10</td>
-      <td>1.42199</td>
+      <td>1.40452</td>
       <td>0.0794379</td>
-      <td>0.134605</td>
+      <td>0.135164</td>
       <td>0.0805857</td>
-      <td>0.10368</td>
+      <td>0.118575</td>
     </tr>
     <tr>
       <th>4</th>
       <td>512</td>
       <td>&lt; 2e-14</td>
-      <td>0.125888</td>
+      <td>0.125498</td>
       <td>2.0811e-10</td>
-      <td>5.57514</td>
+      <td>5.45269</td>
       <td>0.000192206</td>
-      <td>0.170906</td>
+      <td>0.169965</td>
       <td>0.00135015</td>
-      <td>0.120743</td>
+      <td>0.120515</td>
     </tr>
   </tbody>
 </table>
 </div>
 
+
 # 3. F&O 2008 Table 3 -- cash-or-nothing digital under BSM
 
 Discontinuous payoff: COS doesn't suffer Gibbs as long as $\psi$ is computed analytically. Reference $K \cdot df \cdot N(d_2) \approx 0.27330649649$.
+
 
 ```python
 S_d, K_d, r_d, q_d, T_d, sig_d, L_d = 100.0, 120.0, 0.05, 0.0, 0.1, 0.2, 10.0
@@ -424,7 +444,14 @@ ax.grid(True, which="both", alpha=0.3); fig.tight_layout(); plt.show()
 df_t3
 ```
 
-![output](tests_results_assets/cell_8_output_0.png)
+
+    
+![png](tests_results_files/tests_results_8_0.png)
+    
+
+
+
+
 
 <div>
 <style scoped>
@@ -490,11 +517,14 @@ df_t3
 </table>
 </div>
 
+
+
 # 4. F&O 2008 Tables 4-5 -- Heston, $T=1$ and $T=10$
 
 Eq. 52 parameters, $r = q = 0$, $K = 100$. COS and the transform methods use different grids, as in the paper: COS is tested on small $N$, while Lewis/Carr-Madan are tested on larger Fourier grids. Carr-Madan uses the paper's Fourier-domain truncations: $[0,1200]$ for $T=1$ and $[0,500]$ for $T=10$.
 
 References: $C_{T=1} = 5.785155435$, $C_{T=10} = 22.31894579$ from F&O 2008.
+
 
 ```python
 from cos_pricing.carr_madan import carr_madan_price
@@ -563,13 +593,18 @@ print("Table 4 (T=1):")
 display_error_table(_method_table([("COS", t4_cos), ("Lewis", t4_lw), ("CM", t4_cm)]))
 print("Table 5 (T=10):")
 display_error_table(_method_table([("COS", t5_cos), ("Lewis", t5_lw), ("CM", t5_cm)]))
+
 ```
 
-![output](tests_results_assets/cell_10_output_0.png)
 
-```text
-Table 4 (T=1):
-```
+    
+![png](tests_results_files/tests_results_10_0.png)
+    
+
+
+    Table 4 (T=1):
+
+
 
 <div>
 <style scoped>
@@ -605,87 +640,88 @@ Table 4 (T=1):
       <th rowspan="5" valign="top">COS</th>
       <th>40</th>
       <td>0.0134213</td>
-      <td>0.0142335</td>
+      <td>0.0121525</td>
     </tr>
     <tr>
       <th>80</th>
       <td>0.000134617</td>
-      <td>0.0225806</td>
+      <td>0.0156283</td>
     </tr>
     <tr>
       <th>120</th>
       <td>1.68462e-06</td>
-      <td>0.0206023</td>
+      <td>0.0202102</td>
     </tr>
     <tr>
       <th>160</th>
       <td>4.60891e-08</td>
-      <td>0.0241615</td>
+      <td>0.0241129</td>
     </tr>
     <tr>
       <th>200</th>
       <td>4.36043e-10</td>
-      <td>0.0319752</td>
+      <td>0.0282779</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
       <td>1.13144</td>
-      <td>0.0633754</td>
+      <td>0.0584031</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.0214134</td>
-      <td>0.0906056</td>
+      <td>0.0887</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>6.89068e-06</td>
-      <td>0.156151</td>
+      <td>0.151574</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>6.24167e-10</td>
-      <td>0.302807</td>
+      <td>0.278127</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>6.24867e-10</td>
-      <td>0.574422</td>
+      <td>0.532136</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">CM</th>
       <th>512</th>
       <td>3.67341</td>
-      <td>0.158655</td>
+      <td>0.154699</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>2.42182</td>
-      <td>0.2081</td>
+      <td>0.204024</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.562918</td>
-      <td>0.650496</td>
+      <td>0.306126</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>0.0107065</td>
-      <td>0.525609</td>
+      <td>0.512885</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.44628e-06</td>
-      <td>0.999566</td>
+      <td>0.929117</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Table 5 (T=10):
-```
+
+    Table 5 (T=10):
+
+
 
 <div>
 <style scoped>
@@ -721,87 +757,89 @@ Table 5 (T=10):
       <th rowspan="5" valign="top">COS</th>
       <th>40</th>
       <td>0.322909</td>
-      <td>0.0126333</td>
+      <td>0.0117296</td>
     </tr>
     <tr>
       <th>65</th>
       <td>0.0013988</td>
-      <td>0.015245</td>
+      <td>0.0143677</td>
     </tr>
     <tr>
       <th>90</th>
       <td>5.9599e-06</td>
-      <td>0.018189</td>
+      <td>0.0170594</td>
     </tr>
     <tr>
       <th>115</th>
       <td>2.55972e-08</td>
-      <td>0.0240021</td>
+      <td>0.0195423</td>
     </tr>
     <tr>
       <th>140</th>
       <td>9.2631e-10</td>
-      <td>0.0238017</td>
+      <td>0.0224065</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
       <td>1.13144</td>
-      <td>0.0615992</td>
+      <td>0.0591758</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.0214134</td>
-      <td>0.090289</td>
+      <td>0.0896504</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>6.89099e-06</td>
-      <td>0.156371</td>
+      <td>0.152042</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>3.19403e-10</td>
-      <td>0.29818</td>
+      <td>0.278498</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.20082e-10</td>
-      <td>0.59876</td>
+      <td>0.569433</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">CM</th>
       <th>512</th>
       <td>2.08276</td>
-      <td>0.158906</td>
+      <td>0.153997</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.260573</td>
-      <td>0.206476</td>
+      <td>0.206435</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.00214501</td>
-      <td>0.310854</td>
+      <td>0.306628</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>1.38406e-07</td>
-      <td>0.544181</td>
+      <td>0.515372</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.20075e-10</td>
-      <td>1.01032</td>
+      <td>0.980886</td>
     </tr>
   </tbody>
 </table>
 </div>
 
+
 # 5. F&O 2008 Table 6 -- Heston, $T = 1$, 21 strikes
 
 Same Eq. 52 setup, but priced on the paper's 21-strike grid $K \in \{50, 55, 60, \ldots, 150\}$ and reporting `max |err|`. The paper uses separate grids: COS uses small $N$, while Carr-Madan uses larger FFT grids, so we display the methods in a long table instead of forcing mismatched `N` values into one row.
+
 
 ```python
 K21 = np.arange(50.0, 151.0, 5.0)
@@ -848,9 +886,15 @@ for ax, ycol, ylabel in [(a1, "max |err|", "max |err|"), (a2, "ms", "ms / call")
 fig.tight_layout(); plt.show()
 
 display_error_table(_method_table([("COS", t6_cos), ("Lewis", t6_lw), ("CM", t6_cm)]))
+
 ```
 
-![output](tests_results_assets/cell_12_output_0.png)
+
+    
+![png](tests_results_files/tests_results_12_0.png)
+    
+
+
 
 <div>
 <style scoped>
@@ -886,74 +930,77 @@ display_error_table(_method_table([("COS", t6_cos), ("Lewis", t6_lw), ("CM", t6_
       <th rowspan="4" valign="top">COS</th>
       <th>40</th>
       <td>0.0192133</td>
-      <td>0.0198269</td>
+      <td>0.020204</td>
     </tr>
     <tr>
       <th>80</th>
       <td>0.000320936</td>
-      <td>0.0292856</td>
+      <td>0.0304562</td>
     </tr>
     <tr>
       <th>160</th>
       <td>1.90881e-07</td>
-      <td>0.0499877</td>
+      <td>0.0501096</td>
     </tr>
     <tr>
       <th>200</th>
       <td>4.66808e-09</td>
-      <td>0.0586238</td>
+      <td>0.0612473</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">Lewis</th>
       <th>1024</th>
       <td>0.0267668</td>
-      <td>0.430617</td>
+      <td>0.416857</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>8.6135e-06</td>
-      <td>0.820725</td>
+      <td>0.783098</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>3.94826e-08</td>
-      <td>1.65759</td>
+      <td>1.62315</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.94833e-08</td>
-      <td>3.36883</td>
+      <td>3.66075</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">CM</th>
       <th>1024</th>
       <td>2.57051</td>
-      <td>0.210789</td>
+      <td>0.205569</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.56432</td>
-      <td>0.314837</td>
+      <td>0.326501</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>0.0107066</td>
-      <td>0.548104</td>
+      <td>0.516501</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.48521e-06</td>
-      <td>1.01815</td>
+      <td>0.963189</td>
     </tr>
   </tbody>
 </table>
 </div>
+
 
 # 6. F&O 2008 Table 7 -- Variance Gamma
 
 This table uses the interval rule described immediately above Table 7 in Fang-Oosterlee: `T=1` uses `L=10`, while the short-maturity `T=0.1` case uses `L=20`. For this paper-reproduction table we use that original range, not the wider robust cumulant range used elsewhere in the project.
 
 The printed PDF header appears to swap the two reference prices: the model gives `T=0.1 -> 10.993703186...` and `T=1 -> 19.099354724...`. We use the model-consistent maturities below and keep the paper error column exactly as printed.
+
+
 
 ```python
 # Pyfeng's VarGammaCos uses vov in place of nu.
@@ -1002,13 +1049,18 @@ print(f"T=1.0 reference used: {ref_T1:.12f}")
 display_error_table(df_t7_T1)
 print(f"T=0.1 reference used: {ref_T01:.12f}")
 display_error_table(df_t7_T01)
+
 ```
 
-![output](tests_results_assets/cell_14_output_0.png)
 
-```text
-T=1.0 reference used: 19.099354724202
-```
+    
+![png](tests_results_files/tests_results_14_0.png)
+    
+
+
+    T=1.0 reference used: 19.099354724202
+
+
 
 <div>
 <style scoped>
@@ -1068,9 +1120,10 @@ T=1.0 reference used: 19.099354724202
 </table>
 </div>
 
-```text
-T=0.1 reference used: 10.993703186688
-```
+
+    T=0.1 reference used: 10.993703186688
+
+
 
 <div>
 <style scoped>
@@ -1130,6 +1183,7 @@ T=0.1 reference used: 10.993703186688
 </table>
 </div>
 
+
 # 7. F&O 2008 Tables 8-10 -- CGMY at $Y \in \{0.5, 1.5, 1.98\}$
 
 $S = K = 100$, $T = 1$, $r = 0.1$, $q = 0$, $C = 1$, $G = M = 5$. Larger $Y$ means more active small jumps and heavier numerical stress.
@@ -1137,6 +1191,7 @@ $S = K = 100$, $T = 1$, $r = 0.1$, $q = 0$, $C = 1$, $G = M = 5$. Larger $Y$ mea
 Tables 8 and 9 are COS paper-grid checks against the printed Fang-Oosterlee references. The paper compares COS to CONV; this notebook also shows a Carr-Madan diagnostic because CONV is not implemented in the repo.
 
 Table 10 is **not** treated as a successful reproduction. With $Y = 1.98$ and the paper's stated range $[-100,20]$, our strict martingale CGMY implementation gives a high-$N$ price around `0.2601`, while the paper prints `0.252104475`. The very large low-$N$ error is a symptom of this unresolved range/implementation-convention mismatch, not evidence that COS failed in Tables 8-9. We show it as a caveat and omit the Carr-Madan overflow diagnostic for this case.
+
 
 ```python
 S0_c, K_c, T_c, r_c, q_c = 100.0, 100.0, 1.0, 0.1, 0.0
@@ -1229,20 +1284,33 @@ for Y, cfg in PAPER_CGMY.items():
     else:
         print("Carr-Madan diagnostic vs paper ref")
         display_error_table(cm_d.set_index("N"))
+
 ```
 
-![output](tests_results_assets/cell_16_output_0.png)
 
-![output](tests_results_assets/cell_16_output_1.png)
+    
+![png](tests_results_files/tests_results_16_0.png)
+    
 
-![output](tests_results_assets/cell_16_output_2.png)
 
-```text
-Table 8 -- CGMY Y=0.5
-paper reference:   19.8129487706
-internal COS ref:  19.8129487953
-COS paper grid
-```
+
+    
+![png](tests_results_files/tests_results_16_1.png)
+    
+
+
+
+    
+![png](tests_results_files/tests_results_16_2.png)
+    
+
+
+    Table 8 -- CGMY Y=0.5
+    paper reference:   19.8129487706
+    internal COS ref:  19.8129487953
+    COS paper grid
+
+
 
 <div>
 <style scoped>
@@ -1278,45 +1346,46 @@ COS paper grid
       <th>40</th>
       <td>0.00579334</td>
       <td>0.0382</td>
-      <td>0.0623379</td>
+      <td>0.0595742</td>
     </tr>
     <tr>
       <th>60</th>
       <td>0.000491393</td>
       <td>0.000687</td>
-      <td>0.0618967</td>
+      <td>0.0616487</td>
     </tr>
     <tr>
       <th>80</th>
       <td>2.26116e-05</td>
       <td>2.11e-05</td>
-      <td>0.0670106</td>
+      <td>0.064881</td>
     </tr>
     <tr>
       <th>100</th>
       <td>1.113e-06</td>
       <td>9.45e-07</td>
-      <td>0.0706077</td>
+      <td>0.0719125</td>
     </tr>
     <tr>
       <th>120</th>
       <td>7.80023e-08</td>
       <td>5.56e-08</td>
-      <td>0.0717679</td>
+      <td>0.0848217</td>
     </tr>
     <tr>
       <th>140</th>
       <td>2.68786e-08</td>
       <td>4.04e-09</td>
-      <td>0.0768915</td>
+      <td>0.0879871</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Carr-Madan diagnostic vs paper ref
-```
+
+    Carr-Madan diagnostic vs paper ref
+
+
 
 <div>
 <style scoped>
@@ -1349,43 +1418,44 @@ Carr-Madan diagnostic vs paper ref
     <tr>
       <th>512</th>
       <td>0.00837348</td>
-      <td>0.16707</td>
+      <td>0.272171</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.000288182</td>
-      <td>0.232085</td>
+      <td>0.332278</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>2.61792e-05</td>
-      <td>0.361055</td>
+      <td>0.532236</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>9.50286e-07</td>
-      <td>0.667788</td>
+      <td>1.41856</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.75376e-07</td>
-      <td>1.24109</td>
+      <td>1.36652</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>7.26305e-08</td>
-      <td>2.42256</td>
+      <td>4.24231</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Table 9 -- CGMY Y=1.5
-paper reference:   49.7909053050
-internal COS ref:  49.7909051366
-COS paper grid
-```
+
+    Table 9 -- CGMY Y=1.5
+    paper reference:   49.7909053050
+    internal COS ref:  49.7909051366
+    COS paper grid
+
+
 
 <div>
 <style scoped>
@@ -1421,45 +1491,46 @@ COS paper grid
       <th>40</th>
       <td>1.25469</td>
       <td>1.38</td>
-      <td>0.0671871</td>
+      <td>0.0685565</td>
     </tr>
     <tr>
       <th>45</th>
       <td>0.0353538</td>
       <td>0.0198</td>
-      <td>0.0665737</td>
+      <td>0.0618871</td>
     </tr>
     <tr>
       <th>50</th>
       <td>0.000121552</td>
       <td>0.000452</td>
-      <td>0.0699725</td>
+      <td>0.0611994</td>
     </tr>
     <tr>
       <th>55</th>
       <td>1.06786e-05</td>
       <td>9.59e-06</td>
-      <td>0.0688262</td>
+      <td>0.0644131</td>
     </tr>
     <tr>
       <th>60</th>
       <td>2.38234e-07</td>
       <td>1.22e-09</td>
-      <td>0.0677258</td>
+      <td>0.0618746</td>
     </tr>
     <tr>
       <th>65</th>
       <td>1.68385e-07</td>
       <td>7.53e-10</td>
-      <td>0.0686677</td>
+      <td>0.0667635</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Carr-Madan diagnostic vs paper ref
-```
+
+    Carr-Madan diagnostic vs paper ref
+
+
 
 <div>
 <style scoped>
@@ -1492,43 +1563,44 @@ Carr-Madan diagnostic vs paper ref
     <tr>
       <th>512</th>
       <td>4.54271e-05</td>
-      <td>0.195036</td>
+      <td>0.164249</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>3.67881e-07</td>
-      <td>0.259004</td>
+      <td>0.229254</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>3.76542e-08</td>
-      <td>0.431249</td>
+      <td>0.361171</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>1.57435e-07</td>
-      <td>0.69416</td>
+      <td>0.627534</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.62924e-07</td>
-      <td>1.70219</td>
+      <td>1.20401</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>1.63523e-07</td>
-      <td>3.05792</td>
+      <td>2.50759</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Table 10 -- CGMY Y=1.98
-paper reference:   0.2521044750
-internal COS ref:  0.2600986511
-COS paper grid
-```
+
+    Table 10 -- CGMY Y=1.98
+    paper reference:   0.2521044750
+    internal COS ref:  0.2600986511
+    COS paper grid
+
+
 
 <div>
 <style scoped>
@@ -1564,39 +1636,39 @@ COS paper grid
       <th>20</th>
       <td>403.716</td>
       <td>0.0417</td>
-      <td>0.0676208</td>
+      <td>0.0564452</td>
     </tr>
     <tr>
       <th>25</th>
       <td>0.536674</td>
       <td>0.515</td>
-      <td>0.0674687</td>
+      <td>0.0563979</td>
     </tr>
     <tr>
       <th>30</th>
       <td>0.00806645</td>
       <td>6.54e-05</td>
-      <td>0.0683296</td>
+      <td>0.0576748</td>
     </tr>
     <tr>
       <th>35</th>
       <td>0.00799418</td>
       <td>1.1e-09</td>
-      <td>0.0644173</td>
+      <td>0.0577604</td>
     </tr>
     <tr>
       <th>40</th>
       <td>0.00799418</td>
       <td>&lt; 2e-14</td>
-      <td>0.0662842</td>
+      <td>0.0584625</td>
     </tr>
   </tbody>
 </table>
 </div>
 
-```text
-Carr-Madan diagnostic omitted for Y=1.98: damped FFT overflows/unstable here.
-```
+
+    Carr-Madan diagnostic omitted for Y=1.98: damped FFT overflows/unstable here.
+
 
 ## Dimensional analysis story
 
@@ -1628,6 +1700,7 @@ This also explains why Fourier option pricing naturally uses log-moneyness: $\lo
 
 **Why this matters.** Dimensional analysis acts as a test harness: if the pricer violates a symmetry predicted by Buckingham $\pi$, then something is wrong in the implementation, even if no closed-form benchmark is available.
 
+
 # 8. Dimensional (Buckingham π) invariance
 
 The project's original methodological work beyond F&O 2008. Coordinate changes that leave the SDE invariant should leave the dimensionless price invariant -- catches unit/truncation/discount slips that closed-form checks miss.
@@ -1644,6 +1717,8 @@ The project's original methodological work beyond F&O 2008. Coordinate changes t
 Multiply $S$ and $K$ by the same $\lambda$. Since $K/S$ is the only dimensionless moneyness group, $C/S$ should not change.
 
 The table reports the worst normalized residual, $|C(\lambda S,\lambda K)/(\lambda S)-C(S,K)/S|$, across strikes and maturities. Values below the display floor are shown as `< 2e-14`, meaning floating-point-level agreement rather than missing data.
+
+
 
 ```python
 LAMBDAS = [0.1, 0.5, 2.0, 10.0, 100.0]
@@ -1662,7 +1737,9 @@ for lam in LAMBDAS:
 
 df_bsm_scale = pd.DataFrame(rows, columns=["lambda", "cp", "worst normalized residual"])
 display_small_residuals(df_bsm_scale)
+
 ```
+
 
 <div>
 <style scoped>
@@ -1752,9 +1829,11 @@ display_small_residuals(df_bsm_scale)
 </table>
 </div>
 
+
 ## 8.2 &nbsp; BSM dimensionless collapse (`docs/fig_bsm_collapse.png`)
 
 BSM with $r = q = 0$ reduces to two π-groups: $K/S_0$ and $\sigma\sqrt{T}$. The whole BSM call surface lives on $C/S_0 = f(K/S_0, \sigma\sqrt{T})$. Three raw triples with 16× range in $(S_0, T, \sigma)$ all land on the same surface -- the visual π-theorem.
+
 
 ```python
 L_BSM, N_K_s, N_V_s = 20.0, 28, 28
@@ -1807,7 +1886,12 @@ df_bsm_collapse = pd.DataFrame(rows, columns=["K/S0", "triple 1", "triple 2", "t
 display_small_residuals(df_bsm_collapse, cols=["spread"])
 ```
 
-![output](tests_results_assets/cell_22_output_0.png)
+
+    
+![png](tests_results_files/tests_results_22_0.png)
+    
+
+
 
 <div>
 <style scoped>
@@ -1871,9 +1955,12 @@ display_small_residuals(df_bsm_collapse, cols=["spread"])
 </table>
 </div>
 
+
 ## 8.3 &nbsp; Spatial scale invariance -- all four pricers
 
 This repeats the same scale test across BSM, Heston, VG, and CGMY. The residual column is the worst normalized difference after scaling both spot and strike by $\lambda$. Values shown as `< 2e-14` are floating-point-level agreement.
+
+
 
 ```python
 def _bsm   (S, K, T, cp): return BsmCos(sigma=0.25).price(K, S, T, cp=cp)
@@ -1901,7 +1988,9 @@ for name, pricer in PRICERS:
 
 df_all_scale = pd.DataFrame(rows, columns=["model", "lambda", "worst normalized residual"])
 display_small_residuals(df_all_scale)
+
 ```
+
 
 <div>
 <style scoped>
@@ -2051,6 +2140,7 @@ display_small_residuals(df_all_scale)
 </table>
 </div>
 
+
 ## 8.4 &nbsp; Heston temporal $\pi$-invariance
 
 Substituting $t = \mu\tau'$ and rescaling Brownians by $\sqrt{\mu}$ leaves Heston dynamics invariant under $(T, r, q, \kappa, \eta, v_0, \bar u) \to (\mu T, r/\mu, q/\mu, \kappa/\mu, \eta/\mu, v_0/\mu, \bar u/\mu)$. We pin both pricers to the same absolute log-moneyness half-width so the COS grids are bit-identical.
@@ -2062,6 +2152,8 @@ $$
 $$
 
 Values below the display floor are shown as `< 2e-14`; those are floating-point-level residuals, not skipped or missing rows.
+
+
 
 ```python
 MUS, STRIKES_H, TAU_BASE = LAMBDAS, np.array([70., 85., 100., 115., 130.]), 1.0
@@ -2095,7 +2187,9 @@ shown_heston_temporal[resid_col_heston] = shown_heston_temporal[resid_col_heston
     lambda x: f"< {ERR_FLOOR:.0e}" if abs(float(x)) < ERR_FLOOR else x
 )
 display(shown_heston_temporal)
+
 ```
+
 
 <div>
 <style scoped>
@@ -2185,9 +2279,11 @@ display(shown_heston_temporal)
 </table>
 </div>
 
+
 ## 8.5 &nbsp; Heston dimensionless collapse (`docs/fig_heston_collapse.png`)
 
 Heston has 8 π-groups -- after fixing the five rate-dimensioned ones ($\rho$, $\kappa T$, $\bar v T$, $\eta T$, $(r-q)T$), the price lives on $C/S_0 = f(K/S_0, \sqrt{v_0 T})$. Three sextets with very different raw $(S_0, T, v_0, \kappa, \bar u, \eta)$ collapse onto the same surface.
+
 
 ```python
 PI_RHO, PI_RT, PI_KAPPA_T, PI_UBAR_T, PI_ETA_T = -0.70, 0.0, 1.50, 0.04, 0.40
@@ -2245,7 +2341,12 @@ df_heston_collapse = pd.DataFrame(rows, columns=["K/S0", "triple 1", "triple 2",
 display_small_residuals(df_heston_collapse, cols=["spread"])
 ```
 
-![output](tests_results_assets/cell_28_output_0.png)
+
+    
+![png](tests_results_files/tests_results_28_0.png)
+    
+
+
 
 <div>
 <style scoped>
@@ -2309,6 +2410,7 @@ display_small_residuals(df_heston_collapse, cols=["spread"])
 </table>
 </div>
 
+
 ## 8.6 &nbsp; Joint spatial × temporal
 
 Spatial scale $\alpha$ on $(S_0, K)$ combined with temporal rotation $\mu$ -- two of the eight $\pi$-groups held invariant simultaneously.
@@ -2320,6 +2422,8 @@ $$
 $$
 
 Values below the display floor are shown as `< 2e-14`; that means the two normalized prices are equal up to price-scale double precision, not that the test was skipped.
+
+
 
 ```python
 rows = []
@@ -2341,7 +2445,9 @@ shown_joint[resid_col] = shown_joint[resid_col].map(
     lambda x: f"< {ERR_FLOOR:.0e}" if abs(float(x)) < ERR_FLOOR else x
 )
 display(shown_joint)
+
 ```
+
 
 <div>
 <style scoped>
@@ -2498,6 +2604,7 @@ display(shown_joint)
 </table>
 </div>
 
+
 ## Bermudan options: what the table is showing
 
 A European option can be exercised only at maturity. An American option can be exercised continuously. A Bermudan option is in between: it can be exercised on a finite set of dates.
@@ -2518,11 +2625,13 @@ The validation logic is simple and important:
 
 That is exactly what the table below shows: the $M=1$ case matches the European put, and the prices increase toward the known American benchmark near 6.55.
 
+
 # 9. Bermudan -- F&O 2009
 
 *Pricing Early-Exercise and Discrete Barrier Options by Fourier-Cosine Series Expansions*, **Numer. Math. 114:27-62**. §5.1 BSM benchmark: $S = K = 100$, $T = 1$, $\sigma = 0.25$, $r = 0.1$, $q = 0$. Two structural facts: $M = 1$ recovers the European put exactly; prices are non-decreasing in $M$ with American limit $\approx 6.55$.
 
 ## 9.1 &nbsp; European-limit check ($M = 1$)
+
 
 ```python
 S_b, K_b, T_b, sigma_b, r_b, q_b = 100.0, 100.0, 1.0, 0.25, 0.1, 0.0
@@ -2535,6 +2644,9 @@ eu     = float(bsm_price(K_b, S_b, sigma_b, T_b, intr=r_b, divr=q_b, cp=-1))
 pd.DataFrame({"price": [eu, ber_M1, abs(ber_M1 - eu)]},
              index=["European put (analytic)", "Bermudan(M=1) (COS)", "|difference|"])
 ```
+
+
+
 
 <div>
 <style scoped>
@@ -2574,7 +2686,10 @@ pd.DataFrame({"price": [eu, ber_M1, abs(ber_M1 - eu)]},
 </table>
 </div>
 
+
+
 ## 9.2 &nbsp; Convergence to the American limit
+
 
 ```python
 ber.n_cos = 128
@@ -2600,7 +2715,14 @@ fig.tight_layout(); plt.show()
 df_ber
 ```
 
-![output](tests_results_assets/cell_36_output_0.png)
+
+    
+![png](tests_results_files/tests_results_36_0.png)
+    
+
+
+
+
 
 <div>
 <style scoped>
@@ -2684,60 +2806,333 @@ df_ber
 </table>
 </div>
 
-# 10. Next steps after the presentation
 
-These are the follow-up items to push the project further after the class presentation.
 
-## 10.1 Strike-independent integral range and coefficients
+# 10. Post-presentation extension: strike-independent smiles and JP ranges
 
-Current issue: in the Fang-Oosterlee setup, some COS payoff coefficients depend on strike. That is not ideal when pricing a whole volatility smile, because a smile means many strikes at the same maturity.
+This section updates the project after the class presentation.  The point is to move from pricing one option at a time to pricing a whole volatility smile more like a production calibration routine.
 
-Goal:
+## 10.1 Strike-independent COS setup
 
-- Move toward a strike-independent density range and reusable coefficients.
-- Coordinate with Nigel's team.
-- Use Junike-Pankrashkin (2022) as the main target because it gives a sharper error-controlled truncation range.
-- Use Le Floc'h (2020) as the practical robustness reference and sanity check.
+For fixed model parameters, expiry, forward, discount factor, and interval $[a,b]$, the expensive density side is strike-independent:
 
-Why it matters: in production we rarely price one strike. We price a whole smile. If the expensive COS objects are strike-independent, one setup can price many strikes cheaply.
+- cosine grid $u_k = k\pi/(b-a)$
+- characteristic-function samples $arphi(u_k)$
+- phase-shifted, prime-weighted real density coefficients
 
-## 10.2 Black-Scholes control variate for COS
+The strike still enters through the payoff boundary $\log(K/F)$, so payoff coefficients are rebuilt for the strike vector.  But the density coefficients can be cached once and reused.
 
-Idea:
+In code this is:
+
+```python
+setup = make_cos_smile_setup(cf, T, fwd, df, n_cos=N, trunc_range=(a, b))
+prices = setup.price(strikes, cp=1)
+```
+
+The existing `price(...)` path remains unchanged.
+
+
+
+```python
+from cos_pricing import CgmyModel, make_cos_smile_setup
+
+model_smile = CgmyModel(C=1.0, G=5.0, M=10.0, Y=1.5, intr=0.1, divr=0.0)
+S_smile, T_smile, N_smile = 100.0, 1.0, 512
+fwd_smile, df_smile = model_smile._fwd_df(S_smile, T_smile)
+cf_smile = model_smile.char_func(T_smile)
+trunc_smile = model_smile.trunc_range(T_smile)
+setup_smile = make_cos_smile_setup(
+    cf_smile, T_smile, fwd_smile, df_smile,
+    n_cos=N_smile, trunc_range=trunc_smile,
+)
+
+def _mean_ms(fn, repeats=120):
+    fn()  # warm-up
+    t0 = time.perf_counter()
+    for _ in range(repeats):
+        fn()
+    return (time.perf_counter() - t0) / repeats * 1e3
+
+rows = []
+for n_strikes in [5, 25, 101]:
+    strikes = np.linspace(60.0, 140.0, n_strikes)
+
+    def scalar_loop():
+        return np.array([
+            model_smile.price(float(K), S_smile, T_smile, cp=1, n_cos=N_smile)
+            for K in strikes
+        ])
+
+    def vector_price():
+        return model_smile.price(strikes, S_smile, T_smile, cp=1, n_cos=N_smile)
+
+    def setup_price():
+        return setup_smile.price(strikes, cp=1)
+
+    scalar_ms = _mean_ms(scalar_loop)
+    vector_ms = _mean_ms(vector_price)
+    setup_ms = _mean_ms(setup_price)
+    ref = vector_price()
+    rows.append({
+        "strikes": n_strikes,
+        "scalar loop ms": scalar_ms,
+        "vector price ms": vector_ms,
+        "reusable setup ms": setup_ms,
+        "loop/setup speedup": scalar_ms / setup_ms,
+        "vector/setup speedup": vector_ms / setup_ms,
+        "max |setup-vector|": float(np.max(np.abs(setup_price() - ref))),
+    })
+
+df_smile_bench = pd.DataFrame(rows)
+df_smile_bench
+
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>strikes</th>
+      <th>scalar loop ms</th>
+      <th>vector price ms</th>
+      <th>reusable setup ms</th>
+      <th>loop/setup speedup</th>
+      <th>vector/setup speedup</th>
+      <th>max |setup-vector|</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>5</td>
+      <td>0.445534</td>
+      <td>0.114373</td>
+      <td>0.0507969</td>
+      <td>8.77089</td>
+      <td>2.25158</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>25</td>
+      <td>2.22845</td>
+      <td>0.234082</td>
+      <td>0.16968</td>
+      <td>13.1332</td>
+      <td>1.37955</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>101</td>
+      <td>9.01013</td>
+      <td>0.710752</td>
+      <td>0.645532</td>
+      <td>13.9577</td>
+      <td>1.10103</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+## 10.2 Junike-Pankrashkin range selection
+
+Junike-Pankrashkin (2022) chooses the COS truncation range using Markov's inequality on the centered log-return.  In words:
+
+1. Center the log-return around its mean.
+2. Use an even central moment, typically the 8th moment, to bound tail probability.
+3. Pick a symmetric half-width $L$ large enough for the requested tolerance.
+4. Use the interval $[c_1-L, c_1+L]$ in the log-forward variable.
+
+We implemented this as an optional range, not as the default.  The Fang-Oosterlee ranges remain unchanged unless we explicitly call `jp_trunc_range(...)` or `trunc_range="jp"`.
+
+
+
+```python
+from cos_pricing import BsmModel, VgModel
+
+range_models = [
+    ("BSM", BsmModel(sigma=0.2), 1.0),
+    ("VG", VgModel(sigma=0.12, theta=-0.14, nu=0.2, intr=0.1), 1.0),
+    ("CGMY", CgmyModel(C=1.0, G=5.0, M=10.0, Y=0.5, intr=0.1), 1.0),
+]
+range_rows = []
+for name, model, T in range_models:
+    fo_a, fo_b = model.trunc_range(T)
+    for eps in [1e-4, 1e-6, 1e-8]:
+        jp_a, jp_b = model.jp_trunc_range(T, eps_tol=eps, moment_order=8)
+        range_rows.append({
+            "model": name,
+            "eps": eps,
+            "FO width": fo_b - fo_a,
+            "JP width": jp_b - jp_a,
+            "JP center": 0.5 * (jp_a + jp_b),
+            "FO center": 0.5 * (fo_a + fo_b),
+        })
+
+df_jp_ranges = pd.DataFrame(range_rows)
+df_jp_ranges
+
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>model</th>
+      <th>eps</th>
+      <th>FO width</th>
+      <th>JP width</th>
+      <th>JP center</th>
+      <th>FO center</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>BSM</td>
+      <td>0.0001</td>
+      <td>4.8</td>
+      <td>3.6028</td>
+      <td>-0.02</td>
+      <td>-0.02</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>BSM</td>
+      <td>1e-06</td>
+      <td>4.8</td>
+      <td>4.97969</td>
+      <td>-0.02</td>
+      <td>-0.02</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>BSM</td>
+      <td>1e-08</td>
+      <td>4.8</td>
+      <td>7.80436</td>
+      <td>-0.02</td>
+      <td>-0.02</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>VG</td>
+      <td>0.0001</td>
+      <td>3.74183</td>
+      <td>2.4555</td>
+      <td>-0.00893297</td>
+      <td>-0.00893297</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>VG</td>
+      <td>1e-06</td>
+      <td>3.74183</td>
+      <td>3.63229</td>
+      <td>-0.00893297</td>
+      <td>-0.00893297</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>VG</td>
+      <td>1e-08</td>
+      <td>3.74183</td>
+      <td>6.45923</td>
+      <td>-0.00893297</td>
+      <td>-0.00893297</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>CGMY</td>
+      <td>0.0001</td>
+      <td>10</td>
+      <td>5.95319</td>
+      <td>-0.0508652</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>CGMY</td>
+      <td>1e-06</td>
+      <td>10</td>
+      <td>9.25423</td>
+      <td>-0.0508652</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>CGMY</td>
+      <td>1e-08</td>
+      <td>10</td>
+      <td>16.4566</td>
+      <td>-0.0508652</td>
+      <td>0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+## 10.3 Next professor request: Black-Scholes control variate
+
+The remaining follow-up item is the Black-Scholes control variate:
 
 $$
-C_{model}\approx C_{model}^{COS}+\left(C_{BS}^{exact}-C_{BS}^{COS}\right).
+C_{model}pprox C_{model}^{COS}+\left(C_{BS}^{exact}-C_{BS}^{COS}ight).
 $$
 
-The bracket is the COS error on a Black-Scholes model where we know the exact answer. If the BS COS error is correlated with the target-model COS error, this correction cancels part of the numerical error.
+The correction term measures COS error in a Black-Scholes model where the exact answer is known.  If that error is correlated with the target model's COS error, the correction can reduce the final error.
 
-This idea exists for FFT pricing in Joshi and Yang (2011), but applying it cleanly to COS with a strike-independent equivalent volatility could be our contribution.
-
-A simple equivalent volatility proposal is
+For Heston, the simple strike-independent volatility proposal is
 
 $$
-\sigma_{eq}=\sqrt{E[\bar V_T]},
+\sigma_{eq}=\sqrt{E[ar V_T]},\qquad
+E[ar V_T]=ar v+(v_0-ar v)rac{1-e^{-\kappa T}}{\kappa T}.
 $$
 
-where $\bar V_T$ is average variance over the option life. For Heston,
+So the next coding task is:
 
-$$
-E[\bar V_T]=\bar v+(v_0-\bar v)\frac{1-e^{-\kappa T}}{\kappa T}.
-$$
+1. Implement the BS control-variate wrapper.
+2. Start with Heston using $\sigma_{eq}=\sqrt{E[ar V_T]}$.
+3. Validate error reduction at small $N$ for Heston, VG, and CGMY.
+4. Keep it optional until the tests show when it helps.
 
-Why this is attractive:
-
-- It is strike-independent.
-- It is cheap to compute.
-- [PyFENG](https://github.com/PyFE/PyFENG) already has average variance utilities.
-- It composes naturally with the strike-independent smile engine.
-
-## 10.3 Suggested order
-
-1. Implement the Black-Scholes control variate first, because it is smaller and less invasive.
-2. Validate error reduction on Heston, VG, and CGMY at small $N$.
-3. Then implement the strike-independent COS smile engine.
-4. Add Junike-Pankrashkin truncation-range selection.
-5. Benchmark whole-smile pricing against current COS, Lewis, Carr-Madan, and FrFT.
-
-Closing line: COS is already fast and structurally reliable. The next step is to make it more production-like: one setup for a whole volatility smile, error-controlled truncation, and a Black-Scholes control variate to squeeze out the remaining numerical error.

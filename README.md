@@ -344,13 +344,18 @@ A version of this implementation integrated into [PyFENG](https://github.com/PyF
 
 [`examples/strike_independent_smile_benchmark.py`](examples/strike_independent_smile_benchmark.py) compares three smile-pricing paths: a scalar per-strike loop, the existing vectorized `price(...)`, and the reusable `make_cos_smile_setup(...).price(...)` path. The benchmark is intentionally diagnostic: scalar loops show the clearest speedup from coefficient reuse, while the vectorized path is already efficient and mostly pays the remaining payoff-matrix cost.
 
+The presentation notebook [notebooks/tests.ipynb](notebooks/tests.ipynb) includes the same post-presentation extension section, and the readable export is [notebooks/tests_results.md](notebooks/tests_results.md).
+
 ---
 
 ## Test suite
 
+Latest local validation: `181 passed, 4 skipped`.
+
 The test suite covers:
 
 - BSM ([test_cos_method.py](tests/test_cos_method.py)) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases.
+- Strike-independent COS setup and JP ranges ([test_cos_method.py](tests/test_cos_method.py), [test_cos_range.py](tests/test_cos_range.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py)) — reusable smile coefficients, optional Junike-Pankrashkin Markov ranges, and PyFENG additive API consistency.
 - Heston ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py)) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation.
 - Variance Gamma ([test_vg_model.py](tests/test_vg_model.py)) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery.
 - Lewis ([test_lewis.py](tests/test_lewis.py)) — analytic BSM agreement, geometric convergence, cross-check vs COS on Heston and VG.
@@ -376,5 +381,8 @@ python -m pytest tests/ -v
 - Lord R, Kahl C (2010) Complex Logarithms in Heston-Like Models. *Mathematical Finance* 20:671–694.
 - Carr P, Madan D (1999) Option Valuation Using the Fast Fourier Transform. *J. Computational Finance* 2(4):61–73.
 - Lewis A (2001) A Simple Option Formula for General Jump-Diffusion and other Exponential Lévy Processes. *OptionCity.net*.
+- Le Floc'h F (2020) More Robust Pricing of European Options Based on Fourier Cosine Series Expansions. arXiv:2005.13248.
+- Junike G, Pankrashkin K (2022) Precise option pricing by the COS method: How to choose the truncation range. *Applied Mathematics and Computation* 421:126935.
+- Joshi MS, Yang C (2011) Fourier Transforms, Option Pricing and Controls. SSRN Working Paper.
 - Bailey DH, Swarztrauber PN (1991) The Fractional Fourier Transform and Applications. *SIAM Review* 33(3):389–404.
 - Chourdakis K (2005) Option pricing using the fractional FFT. *J. Computational Finance* 8(2):1–18.
