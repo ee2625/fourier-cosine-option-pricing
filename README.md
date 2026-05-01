@@ -4,7 +4,7 @@ Implementation of the Fang–Oosterlee COS method for European option pricing in
 
 **Reference paper.** Fang, F. and Oosterlee, C.W. *A Novel Pricing Method for European Options Based on Fourier-Cosine Series Expansions.* SIAM J. Sci. Comput. 31(2):826–848, 2008. <https://doi.org/10.1137/080718061>
 
-**What this repo covers.** Reproduction of all ten benchmark tables from the paper (BSM, Heston, Variance Gamma, CGMY); a four-way comparison of the COS method against three other CF-based pricers (Lewis 2001, Carr-Madan, fractional FFT); the early-exercise extension from the Fang-Oosterlee 2009 follow-up paper; and structural π-symmetry verification across all four models.
+**What this repo covers.** Reproduction and diagnostics for the Fang-Oosterlee benchmark tables (BSM, Heston, Variance Gamma, CGMY), with the CGMY $Y=1.98$ case called out as an unresolved caveat; a four-way comparison of the COS method against three other CF-based pricers (Lewis 2001, Carr-Madan, fractional FFT); the early-exercise extension from the Fang-Oosterlee 2009 follow-up paper; and structural π-symmetry verification across all four models.
 
 ## Quick start
 
@@ -52,20 +52,20 @@ By $N=64$ the reconstruction is at machine precision — the core COS identity t
 
 ### Table 2 — BSM, four CF-based pricers on one bench: COS vs Lewis vs FrFT vs Carr-Madan
 
-GBM with $\sigma = 0.25$, $r = 0.1$, $q = 0$, $T = 0.1$, spot 100, strikes $\{80, 100, 120\}$. Analytic Black-Scholes references: 20.7992, 3.6600, 0.0446.
+GBM with $\sigma = 0.25$, $r = 0.1$, $q = 0$, $T = 0.1$, spot 100, strikes $\{80, 100, 120\}$. Analytic Black-Scholes references: 20.7992, 3.6600, 0.0446. Carr-Madan uses the paper's stated Fourier truncation range $[0,100]$, i.e. $\eta=100/N$.
 
 | | | N=32 | N=64 | N=128 | N=256 | N=512 |
 |---|---|---:|---:|---:|---:|---:|
-| COS | msec | 0.0336 | 0.0353 | 0.0405 | 0.0480 | 0.0654 |
-|  | max error | 2.43e-07 | 3.55e-15 | 3.55e-15 | 3.55e-15 | 3.55e-15 |
-| Lewis | msec | 0.0773 | 0.1352 | 0.3900 | 1.7775 | 12.8449 |
+| COS | msec | 0.0642 | 0.0632 | 0.0724 | 0.0941 | 0.1259 |
+|  | max error | 2.05e-05 | <2e-14 | <2e-14 | <2e-14 | <2e-14 |
+| Lewis | msec | 0.0730 | 0.1318 | 0.3929 | 1.4220 | 5.5751 |
 |  | max error | 4.16e+00 | 1.52e-02 | 3.53e-06 | 3.90e-10 | 2.08e-10 |
-| FrFT | msec | 0.1509 | 0.1374 | 0.1236 | 0.1547 | 0.1790 |
+| FrFT | msec | 0.1125 | 0.1122 | 0.1286 | 0.1346 | 0.1709 |
 |  | max error | 1.17e+01 | 1.94e+00 | 1.37e+00 | 7.94e-02 | 1.92e-04 |
-| Carr-Madan | msec | 0.1005 | 0.0878 | 0.0876 | 0.0954 | 0.1134 |
-|  | max error | 9.77e-01 | 1.23e+00 | 7.84e-02 | 6.04e-04 | 4.12e-04 |
+| Carr-Madan | msec | 0.0890 | 0.0909 | 0.0978 | 0.1037 | 0.1207 |
+|  | max error | 1.17e+01 | 1.89e+00 | 1.37e+00 | 8.06e-02 | 1.35e-03 |
 
-![Table 2](examples/table_2.png)
+The current plot for this comparison is generated in [`notebooks/tests.ipynb`](notebooks/tests.ipynb); the table above is the source-of-truth summary.
 
 Four distinct convergence regimes on one benchmark:
 
@@ -106,7 +106,7 @@ The error reaches machine precision by $N = 60$ even for this discontinuous payo
 
 Parameters (paper Eq. 52): $S_0 = 100$, $r = q = 0$, $\lambda = 1.5768$, $\eta = 0.5751$, $\bar u = 0.0398$, $v_0 = 0.0175$, $\rho = -0.5711$.
 
-`cold ms` is the standalone no-cache path (numba-jitted scalar loop). `warm ms` is the class with caching primed (`HestonCOSPricer.price_call`). Both share the same compiled kernels.
+The README tables below show the COS reproduction rows. The presentation notebook also includes Lewis/Carr-Madan diagnostics on method-specific Fourier grids; Carr-Madan uses the paper's Fourier truncations $[0,1200]$ for $T=1$ and $[0,500]$ for $T=10$.
 
 **Table 4 — $T = 1$, single strike ($K = 100$), $L = 10$**
 
@@ -115,8 +115,7 @@ Parameters (paper Eq. 52): $S_0 = 100$, $r = q = 0$, $\lambda = 1.5768$, $\eta =
 | paper error    | 4.69e-02 | 3.81e-04 | 1.17e-05 | 6.18e-07 | 3.70e-09 |
 | our error      | 1.34e-02 | 1.35e-04 | 1.68e-06 | 4.61e-08 | 4.36e-10 |
 | paper ms       | 0.0607 | 0.0805 | 0.1078 | 0.1300 | 0.1539 |
-| cold ms (ours) | 0.0082 | 0.0167 | 0.0230 | 0.0303 | 0.0511 |
-| warm ms (ours) | 0.0037 | 0.0027 | 0.0020 | 0.0040 | 0.0032 |
+| our ms         | 0.0142 | 0.0226 | 0.0206 | 0.0242 | 0.0320 |
 
 **Table 5 — $T = 10$, single strike ($K = 100$), $L = 32$**
 
@@ -125,20 +124,18 @@ Parameters (paper Eq. 52): $S_0 = 100$, $r = q = 0$, $\lambda = 1.5768$, $\eta =
 | paper error    | 4.96e-01 | 4.63e-03 | 1.35e-05 | 1.08e-07 | 9.88e-10 |
 | our error      | 3.23e-01 | 1.40e-03 | 5.96e-06 | 2.56e-08 | 9.27e-10 |
 | paper ms       | 0.0598 | 0.0747 | 0.0916 | 0.1038 | 0.1230 |
-| cold ms (ours) | 0.0083 | 0.0172 | 0.0178 | 0.0225 | 0.0272 |
-| warm ms (ours) | 0.0022 | 0.0023 | 0.0022 | 0.0022 | 0.0047 |
+| our ms         | 0.0126 | 0.0152 | 0.0182 | 0.0240 | 0.0238 |
 
-**Table 6 — $T = 1$, 21 strikes ($K = 50, 55, \ldots, 150$), $L = 10.5$**
+**Table 6 — $T = 1$, 21 strikes ($K = 50, 55, \ldots, 150$), $L = 10$**
 
 | | N=40 | N=80 | N=160 | N=200 |
 |---|---|---|---|---|
 | paper max error | 5.19e-02 | 7.18e-04 | 6.18e-07 | 2.05e-08 |
-| our max error   | 2.81e-02 | 6.07e-04 | 3.42e-07 | 1.14e-08 |
+| our max error   | 1.92e-02 | 3.21e-04 | 1.91e-07 | 4.67e-09 |
 | paper ms        | 0.1015 | 0.1766 | 0.3383 | 0.4214 |
-| cold ms (ours)  | 0.0370 | 0.0499 | 0.1458 | 0.1691 |
-| warm ms (ours)  | 0.0019 | 0.0023 | 0.0045 | 0.0020 |
+| our ms          | 0.0198 | 0.0293 | 0.0500 | 0.0586 |
 
-**Every row clears both the paper's error and its per-call runtime.** Warm runtimes are 9–15 µs, roughly an order of magnitude under the paper's 60–420 µs on 2008 hardware. The reproduction scripts hard-assert the inequalities on every cell ([examples/test4.py](examples/test4.py), [test5.py](examples/test5.py), [test6.py](examples/test6.py)) and exit non-zero on regression.
+The COS rows clear the paper's reported errors in these reproduced Heston setups. Runtime comparisons are machine-dependent, so the notebook should be treated as the current executable source for timings.
 
 ---
 
@@ -168,25 +165,25 @@ Parameters (paper Eq. 55): $S_0 = 100$, $K = 100$, $r = 0.1$, $q = 0$, $C = 1$, 
 | paper error    | 3.82e-02 | 6.87e-04 | 2.11e-05 | 9.45e-07 | 5.56e-08 | 4.04e-09 |
 | our error      | 5.79e-03 | 4.91e-04 | 2.26e-05 | 1.11e-06 | 7.80e-08 | 2.69e-08 |
 | paper ms       | 0.0560 | 0.0645 | 0.0844 | 0.1280 | 0.1051 | 0.1216 |
-| our ms         | 0.0733 | 0.0774 | 0.0795 | 0.0810 | 0.0855 | 0.0876 |
+| our ms         | 0.0623 | 0.0619 | 0.0670 | 0.0706 | 0.0718 | 0.0769 |
 
 **Table 9 — $Y = 1.5$** (Truncation range: $[-15, 15]$)
 | | N=40 | N=45 | N=50 | N=55 | N=60 | N=65 |
 |---|---|---|---|---|---|---|
 | paper error    | 1.38e+00 | 1.98e-02 | 4.52e-04 | 9.59e-06 | 1.22e-09 | 7.53e-10 |
-| our error      | 1.25e+00 | 3.54e-02 | 1.21e-04 | 1.09e-05 | 2.78e-08 | 4.05e-08 |
+| our error      | 1.25e+00 | 3.54e-02 | 1.22e-04 | 1.07e-05 | 2.38e-07 | 1.68e-07 |
 | paper ms       | 0.0545 | 0.0589 | 0.0689 | 0.0690 | 0.0732 | 0.0748 |
-| our ms         | 0.0882 | 0.0842 | 0.0952 | 0.0835 | 0.0852 | 0.0890 |
+| our ms         | 0.0672 | 0.0666 | 0.0700 | 0.0688 | 0.0677 | 0.0687 |
 
 **Table 10 — $Y = 1.98$** (Truncation range: $[-100, 20]$)
 | | N=20 | N=25 | N=30 | N=35 | N=40 |
 |---|---|---|---|---|---|
 | paper error    | 4.17e-02 | 5.15e-01 | 6.54e-05 | 1.10e-09 | 1.94e-15 |
-| our error      | 4.04e+02 | 5.36e-01 | 8.29e-03 | 8.21e-03 | 8.21e-03 |
+| our error      | 4.04e+02 | 5.37e-01 | 8.07e-03 | 7.99e-03 | 7.99e-03 |
 | paper ms       | 0.0463 | 0.0438 | 0.0485 | 0.0511 | 0.0538 |
-| our ms         | 0.0759 | 0.0756 | 0.0752 | 0.0792 | 0.0807 |
+| our ms         | 0.0676 | 0.0675 | 0.0683 | 0.0644 | 0.0663 |
 
-> **Note on Table 10.** For $Y = 1.98$ the strict martingale drift correction shifts the conditional mean heavily negative ($w \approx -87.5$). At $N = 20$ the density is compressed against the prescribed left boundary $-100$; 20 cosine terms can't resolve it (severe aliasing). By $N = 25$ our error (0.536) matches the paper's (0.515). From $N = 30$ on, our error plateaus at ~8e-3 because the $-100$ boundary truncates the left tail. The paper's reported 1e-15 precision and smooth $N = 20$ behaviour suggest the authors used a wider unpublished bound (e.g. $[-300, 20]$).
+> **Note on Table 10.** We do **not** treat $Y = 1.98$ as a successful reproduction. For this near-stable CGMY case, our strict martingale implementation with the paper's stated $[-100,20]$ range converges to about `0.2601`, while the paper prints `0.252104475`. The large $N=20$ error is therefore shown as a caveat, not hidden. It likely reflects an implementation convention, branch/drift convention, or unstated numerical choice in the original paper; Carr-Madan is omitted in the presentation notebook for this case because the damped FFT overflows.
 
 ---
 
