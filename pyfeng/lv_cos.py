@@ -32,16 +32,100 @@ References:
 """
 
 import numpy as np
+from scipy.stats import norm
 
 from .cos_range import cgmy_cumulants, vg_cumulants
-from .sv_cos import CosABC
+from .sv_cos import BsmCos, CosABC
 from .sv_fft import VarGammaFft, CgmyFft
 
 
 __all__ = ["VarGammaCos", "CgmyCos"]
 
 
-class VarGammaCos(VarGammaFft, CosABC):
+class _LevyBsmControlVariateMixin:
+    """Optional variance-matched Black-Scholes control variate for Levy COS."""
+
+    def _log_return_variance(self, texp):
+        return float(self._jp_cumulants(texp, order=2)[2])
+
+    def equivalent_bsm_vol(self, texp):
+        """Variance-matched BS volatility ``sqrt(c2 / T)``."""
+        T = float(texp)
+        if T <= 0.0:
+            raise ValueError(f"texp must be > 0, got {texp}")
+        variance = self._log_return_variance(T)
+        if variance <= 0.0:
+            raise ValueError(f"log-return variance must be > 0, got {variance}")
+        return float(np.sqrt(variance / T))
+
+    def _bsm_exact_price(self, strike, spot, texp, sigma, cp=1):
+        fwd, df, _ = self._fwd_factor(spot, texp)
+        fwd = float(np.asarray(fwd, dtype=float).reshape(-1)[0])
+        df = float(np.asarray(df, dtype=float).reshape(-1)[0])
+        strike_a, cp_a = np.broadcast_arrays(
+            np.asarray(strike, dtype=float),
+            np.asarray(cp, dtype=float),
+        )
+        scalar_out = strike_a.shape == ()
+
+        sqt = float(sigma) * np.sqrt(float(texp))
+        if sqt <= 0.0:
+            raise ValueError(f"sigma*sqrt(texp) must be > 0, got {sqt}")
+        d1 = np.log(fwd / strike_a) / sqt + 0.5 * sqt
+        d2 = d1 - sqt
+        price = df * cp_a * (
+            fwd * norm.cdf(cp_a * d1) - strike_a * norm.cdf(cp_a * d2)
+        )
+        return float(price.reshape(-1)[0]) if scalar_out else price
+
+    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, trunc_range=None):
+        """Black-Scholes correction ``BS_exact - BS_COS``."""
+        sigma_eq = self.equivalent_bsm_vol(texp)
+        cv_range = self._truncation_range(texp) if trunc_range is None else trunc_range
+
+        bs = BsmCos(
+            sigma=sigma_eq,
+            intr=self.intr,
+            divr=self.divr,
+            is_fwd=self.is_fwd,
+        )
+        bs.n_cos = int(self.n_cos)
+        bs_cos = bs.price_smile(strike, spot, texp, cp=cp, trunc_range=cv_range)
+        bs_exact = self._bsm_exact_price(strike, spot, texp, sigma_eq, cp=cp)
+        return bs_exact - bs_cos
+
+    def price_cv(self, strike, spot, texp, cp=1):
+        """COS price with an opt-in variance-matched BS control variate."""
+        return self.price(strike, spot, texp, cp=cp) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp
+        )
+
+    def price_smile_cv(
+        self,
+        strike,
+        spot,
+        texp,
+        cp=1,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
+        """Smile price using reusable coefficients plus the same-range BS CV."""
+        setup = self.make_smile_setup(
+            spot,
+            texp,
+            trunc_range=trunc_range,
+            eps_tol=eps_tol,
+            moment_order=moment_order,
+            payoff_bound=payoff_bound,
+        )
+        return setup.price(strike, cp=cp) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b)
+        )
+
+
+class VarGammaCos(_LevyBsmControlVariateMixin, VarGammaFft, CosABC):
     """
     Variance Gamma (VG) European option pricing via the COS method.
 
@@ -146,7 +230,7 @@ class VarGammaCos(VarGammaFft, CosABC):
         )
 
 
-class CgmyCos(CgmyFft, CosABC):
+class CgmyCos(_LevyBsmControlVariateMixin, CgmyFft, CosABC):
     """
     CGMY infinite-activity Lévy European option pricing via the COS method.
 

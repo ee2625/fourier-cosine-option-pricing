@@ -39,6 +39,10 @@ def _vg(**overrides):
     return VarGammaCos(**params)
 
 
+def _scalar(value):
+    return float(np.asarray(value, dtype=float).reshape(-1)[0])
+
+
 # 1. Install wiring -----------------------------------------------------------
 
 def test_vg_install_wiring():
@@ -100,6 +104,25 @@ def test_vg_price_smile_matches_price_and_reuses_setup():
     m.n_cos = 64
     assert setup.n_cos == 256
     assert np.max(np.abs(setup.price(strikes, cp=cp) - via_setup)) < 1e-14
+
+
+def test_vg_control_variate_identity_shape_and_coarse_reduction():
+    m = _vg()
+    m.n_cos = 16
+    strikes = np.array([85.0, 90.0, 95.0])
+
+    plain = m.price(strikes, VG_SPOT, 1.0)
+    adj = m.bsm_control_variate_adjustment(strikes, VG_SPOT, 1.0)
+    cv = m.price_cv(strikes, VG_SPOT, 1.0)
+
+    assert cv.shape == strikes.shape
+    assert np.max(np.abs(cv - (plain + adj))) < 1e-12
+    c2 = _scalar(m._jp_cumulants(1.0, order=2)[2])
+    assert abs(m.equivalent_bsm_vol(1.0) - np.sqrt(c2)) < 1e-15
+
+    plain_err = abs(m.price(VG_STRIKE, VG_SPOT, 1.0) - VG_REF_T1)
+    cv_err = abs(m.price_cv(VG_STRIKE, VG_SPOT, 1.0) - VG_REF_T1)
+    assert cv_err < plain_err
 
 
 # 4. Put-call parity ----------------------------------------------------------
@@ -264,6 +287,28 @@ def test_cgmy_price_smile_matches_price():
 
     assert got.shape == strikes.shape
     assert np.max(np.abs(got - ref)) < 1e-10
+
+
+def test_cgmy_control_variate_identity_shape_and_coarse_reduction():
+    m = _cgmy()
+    m.n_cos = 16
+    strikes = np.array([90.0, 100.0, 110.0])
+
+    plain = m.price(strikes, CGMY_SPOT, 1.0)
+    adj = m.bsm_control_variate_adjustment(strikes, CGMY_SPOT, 1.0)
+    cv = m.price_cv(strikes, CGMY_SPOT, 1.0)
+
+    assert cv.shape == strikes.shape
+    assert np.max(np.abs(cv - (plain + adj))) < 1e-12
+    c2 = _scalar(m._jp_cumulants(1.0, order=2)[2])
+    assert abs(m.equivalent_bsm_vol(1.0) - np.sqrt(c2)) < 1e-15
+
+    ref_model = _cgmy()
+    ref_model.n_cos = 4096
+    ref = ref_model.price(100.0, CGMY_SPOT, 1.0)
+    plain_err = abs(m.price(100.0, CGMY_SPOT, 1.0) - ref)
+    cv_err = abs(m.price_cv(100.0, CGMY_SPOT, 1.0) - ref)
+    assert cv_err < plain_err
 
 
 # 13. Put-call parity ---------------------------------------------------------

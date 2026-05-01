@@ -38,6 +38,17 @@ def heston_equivalent_bsm_vol(v0, kappa, theta, texp):
     return float(np.sqrt(avg_var))
 
 
+def variance_equivalent_bsm_vol(log_return_variance, texp):
+    """Equivalent BS volatility from a log-return variance cumulant."""
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    variance = float(log_return_variance)
+    if variance <= 0.0:
+        raise ValueError(f"log_return_variance must be > 0, got {variance}")
+    return float(np.sqrt(variance / T))
+
+
 def bsm_control_variate_adjustment(
     strike,
     spot,

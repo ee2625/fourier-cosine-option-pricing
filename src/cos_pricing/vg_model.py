@@ -6,6 +6,7 @@ Reference:
     Section 5.4, Eq. (31) and Table 11.
 """
 import numpy as np
+from .control_variate import bsm_control_variate_adjustment, variance_equivalent_bsm_vol
 from .cos_method import cos_price
 from .cos_range import central_moment_from_cumulants, jp_markov_range, vg_cumulants
 
@@ -95,6 +96,35 @@ class VgModel:
             eps_tol=eps_tol,
             payoff_bound=payoff_bound,
             moment_order=moment_order,
+        )
+
+    def equivalent_bsm_vol(self, texp):
+        """
+        Variance-matched BS volatility ``sqrt(c2 / T)`` for log(S_T/F).
+
+        For VG, ``c2 / T = sigma^2 + nu*theta^2``.
+        """
+        c2 = (self.sigma**2 + self.nu * self.theta**2) * float(texp)
+        return variance_equivalent_bsm_vol(c2, texp)
+
+    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, n_cos=128):
+        """Black-Scholes correction ``BS_exact - BS_COS`` on the VG COS range."""
+        return bsm_control_variate_adjustment(
+            strike,
+            spot,
+            texp,
+            self.equivalent_bsm_vol(texp),
+            intr=self.intr,
+            divr=self.divr,
+            cp=cp,
+            n_cos=n_cos,
+            trunc_range=self.trunc_range(texp),
+        )
+
+    def price_cv(self, strike, spot, texp, cp=1, n_cos=128):
+        """VG COS price with an optional variance-matched BS control variate."""
+        return self.price(strike, spot, texp, cp=cp, n_cos=n_cos) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp, n_cos=n_cos
         )
 
     def price(self, strike, spot, texp, cp=1, n_cos=128):

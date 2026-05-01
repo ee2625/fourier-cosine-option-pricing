@@ -35,6 +35,7 @@ from .control_variate import (
     bsm_control_variate_adjustment,
     heston_average_variance_mean,
     heston_equivalent_bsm_vol,
+    variance_equivalent_bsm_vol,
 )
 
 __all__ = [
@@ -64,4 +65,5 @@ __all__ = [
     "bsm_control_variate_adjustment",
     "heston_average_variance_mean",
     "heston_equivalent_bsm_vol",
+    "variance_equivalent_bsm_vol",
 ]

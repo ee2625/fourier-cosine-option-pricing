@@ -7,6 +7,7 @@ Reference:
 """
 import numpy as np
 from scipy.special import gamma
+from .control_variate import bsm_control_variate_adjustment, variance_equivalent_bsm_vol
 from .cos_method import cos_price
 from .cos_range import central_moment_from_cumulants, cgmy_cumulants, jp_markov_range
 
@@ -81,6 +82,31 @@ class CgmyModel:
         df = np.exp(-self.intr * texp)
         fwd = spot * np.exp((self.intr - self.divr) * texp)
         return fwd, df
+
+    def equivalent_bsm_vol(self, texp):
+        """Variance-matched BS volatility ``sqrt(c2 / T)`` for log(S_T/F)."""
+        c2 = cgmy_cumulants(self.C, self.G, self.M, self.Y, texp, order=2)[2]
+        return variance_equivalent_bsm_vol(c2, texp)
+
+    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, n_cos=128, L=10.0):
+        """Black-Scholes correction ``BS_exact - BS_COS`` on the CGMY COS range."""
+        return bsm_control_variate_adjustment(
+            strike,
+            spot,
+            texp,
+            self.equivalent_bsm_vol(texp),
+            intr=self.intr,
+            divr=self.divr,
+            cp=cp,
+            n_cos=n_cos,
+            trunc_range=self.trunc_range(texp, L),
+        )
+
+    def price_cv(self, strike, spot, texp, cp=1, n_cos=128, L=10.0):
+        """CGMY COS price with an optional variance-matched BS control variate."""
+        return self.price(strike, spot, texp, cp=cp, n_cos=n_cos, L=L) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp, n_cos=n_cos, L=L
+        )
 
     def price(self, strike, spot, texp, cp=1, n_cos=128, L=10.0):
         """European option price via the COS method."""
