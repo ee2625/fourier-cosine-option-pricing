@@ -49,6 +49,61 @@ def variance_equivalent_bsm_vol(log_return_variance, texp):
     return float(np.sqrt(variance / T))
 
 
+def _vol_from_variance_rate(variance_rate):
+    variance_rate = float(np.real(variance_rate))
+    if not np.isfinite(variance_rate) or variance_rate <= 0.0:
+        raise ValueError(f"equivalent BS variance rate must be > 0, got {variance_rate}")
+    return float(np.sqrt(variance_rate))
+
+
+def joshi_yang_real_axis_bsm_vol(mgf, texp, eps=1e-5):
+    """
+    Joshi-Yang real-axis BS volatility selector, Eq. (3.5).
+
+    The paper matches first derivatives of the target and BS characteristic
+    functions at ``-i``.  In MGF notation for ``X = log(S_T/F)``, this is
+
+        sigma^2 = 2 * K'(1) / T,
+
+    where ``K(u) = log(E[exp(u X)])``.  This corresponds to matching
+    ``E[(S_T/F) log(S_T/F)]``.
+    """
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    if eps <= 0.0:
+        raise ValueError(f"eps must be > 0, got {eps}")
+
+    kp = (
+        np.log(complex(mgf(1.0 + eps)))
+        - np.log(complex(mgf(1.0 - eps)))
+    ) / (2.0 * eps)
+    return _vol_from_variance_rate(2.0 * kp.real / T)
+
+
+def joshi_yang_contour_bsm_vol(mgf, texp, eta=0.5):
+    """
+    Joshi-Yang contour BS volatility selector, Eq. (3.4).
+
+    For a contour with imaginary part ``eta`` not equal to 0 or 1, the BS
+    and target characteristic functions are matched at ``i(eta - 1)``.
+    In MGF notation this is
+
+        sigma^2 = 2 * log(M(1 - eta)) / (eta * (eta - 1) * T).
+
+    The paper's common Hermitian contour is ``eta = 0.5``.
+    """
+    T = float(texp)
+    eta = float(eta)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    if np.isclose(eta, 0.0) or np.isclose(eta, 1.0):
+        raise ValueError("eta must not be 0 or 1 for Eq. (3.4)")
+
+    log_m = np.log(complex(mgf(1.0 - eta))).real
+    return _vol_from_variance_rate(2.0 * log_m / (eta * (eta - 1.0) * T))
+
+
 def bsm_control_variate_adjustment(
     strike,
     spot,

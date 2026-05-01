@@ -41,6 +41,8 @@ from .control_variate import (
     bsm_control_variate_adjustment,
     heston_average_variance_mean,
     heston_equivalent_bsm_vol,
+    joshi_yang_contour_bsm_vol,
+    joshi_yang_real_axis_bsm_vol,
 )
 
 
@@ -360,9 +362,27 @@ class HestonCOSPricer:
         """Mean of the Heston average variance over ``[0, tau]``."""
         return heston_average_variance_mean(self.v0, self.lam, self.ubar, tau)
 
-    def equivalent_bsm_vol(self, tau):
-        """Equivalent BS volatility ``sqrt(E[average variance])``."""
-        return heston_equivalent_bsm_vol(self.v0, self.lam, self.ubar, tau)
+    def _log_forward_mgf(self, uu, tau):
+        """MGF of log(S_T/F) from the source MGF of log(S_T/S0)."""
+        return np.exp(-np.asarray(uu) * self._drift_rq * tau) * self.mgf_logprice(uu, tau)
+
+    def equivalent_bsm_vol(self, tau, method="simple"):
+        """
+        Equivalent BS volatility for the control variate.
+
+        ``method="simple"`` uses the average-variance shortcut.  The
+        Joshi-Yang options implement Section 3.3 of Joshi and Yang (2011):
+        ``"joshi"`` is the real-axis derivative match (Eq. 3.5), while
+        ``"joshi-half"`` is the eta=1/2 contour match (Eq. 3.4).
+        """
+        method = method.lower()
+        if method == "simple":
+            return heston_equivalent_bsm_vol(self.v0, self.lam, self.ubar, tau)
+        if method in {"joshi", "joshi-real", "joshi-yang"}:
+            return joshi_yang_real_axis_bsm_vol(lambda uu: self._log_forward_mgf(uu, tau), tau)
+        if method in {"joshi-half", "joshi-contour", "joshi-eta-half"}:
+            return joshi_yang_contour_bsm_vol(lambda uu: self._log_forward_mgf(uu, tau), tau, eta=0.5)
+        raise ValueError(f"unknown control-variate vol method {method!r}")
 
     def _bsm_cv_trunc_range(self, tau, L=None):
         """
@@ -379,9 +399,9 @@ class HestonCOSPricer:
         half = L_value * self._sigma_h
         return center - half, center + half
 
-    def bsm_control_variate_adjustment(self, K, tau, cp=1, N=160, L=None):
+    def bsm_control_variate_adjustment(self, K, tau, cp=1, N=160, L=None, vol_method="simple"):
         """Black-Scholes correction ``BS_exact - BS_COS``."""
-        sigma_eq = self.equivalent_bsm_vol(tau)
+        sigma_eq = self.equivalent_bsm_vol(tau, method=vol_method)
         return bsm_control_variate_adjustment(
             K,
             self.S0,
@@ -394,7 +414,7 @@ class HestonCOSPricer:
             trunc_range=self._bsm_cv_trunc_range(tau, L=L),
         )
 
-    def price_cv(self, K, tau, cp=1, N=160, L=None):
+    def price_cv(self, K, tau, cp=1, N=160, L=None, vol_method="simple"):
         """
         Heston COS price with a Black-Scholes control-variate correction.
 
@@ -402,16 +422,16 @@ class HestonCOSPricer:
         we evaluate where the correction is helpful.
         """
         return self.price(K, tau, cp=cp, N=N, L=L) + self.bsm_control_variate_adjustment(
-            K, tau, cp=cp, N=N, L=L
+            K, tau, cp=cp, N=N, L=L, vol_method=vol_method
         )
 
-    def price_call_cv(self, K, tau, N=160, L=None):
+    def price_call_cv(self, K, tau, N=160, L=None, vol_method="simple"):
         """Call price with the optional BS control variate."""
-        return self.price_cv(K, tau, cp=1, N=N, L=L)
+        return self.price_cv(K, tau, cp=1, N=N, L=L, vol_method=vol_method)
 
-    def price_put_cv(self, K, tau, N=160, L=None):
+    def price_put_cv(self, K, tau, N=160, L=None, vol_method="simple"):
         """Put price with the optional BS control variate."""
-        return self.price_cv(K, tau, cp=-1, N=N, L=L)
+        return self.price_cv(K, tau, cp=-1, N=N, L=L, vol_method=vol_method)
 
     # ------------------------------------------------------------------------
     # NumPy-reference helpers -- preserved for inspection and existing tests.

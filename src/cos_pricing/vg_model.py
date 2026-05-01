@@ -6,7 +6,12 @@ Reference:
     Section 5.4, Eq. (31) and Table 11.
 """
 import numpy as np
-from .control_variate import bsm_control_variate_adjustment, variance_equivalent_bsm_vol
+from .control_variate import (
+    bsm_control_variate_adjustment,
+    joshi_yang_contour_bsm_vol,
+    joshi_yang_real_axis_bsm_vol,
+    variance_equivalent_bsm_vol,
+)
 from .cos_method import cos_price
 from .cos_range import central_moment_from_cumulants, jp_markov_range, vg_cumulants
 
@@ -98,22 +103,36 @@ class VgModel:
             moment_order=moment_order,
         )
 
-    def equivalent_bsm_vol(self, texp):
-        """
-        Variance-matched BS volatility ``sqrt(c2 / T)`` for log(S_T/F).
+    def _mgf_log_forward(self, uu, texp):
+        """MGF of log(S_T/F), evaluated through the model characteristic function."""
+        return self.char_func(texp)(-1j * np.asarray(uu))
 
-        For VG, ``c2 / T = sigma^2 + nu*theta^2``.
+    def equivalent_bsm_vol(self, texp, method="simple"):
         """
-        c2 = (self.sigma**2 + self.nu * self.theta**2) * float(texp)
-        return variance_equivalent_bsm_vol(c2, texp)
+        Equivalent BS volatility for the control variate.
 
-    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, n_cos=128):
+        ``method="simple"`` uses variance matching, ``sqrt(c2/T)``.  The
+        Joshi-Yang options implement Section 3.3 of Joshi and Yang (2011):
+        ``"joshi"`` is the real-axis derivative match (Eq. 3.5), while
+        ``"joshi-half"`` is the eta=1/2 contour match (Eq. 3.4).
+        """
+        method = method.lower()
+        if method == "simple":
+            c2 = (self.sigma**2 + self.nu * self.theta**2) * float(texp)
+            return variance_equivalent_bsm_vol(c2, texp)
+        if method in {"joshi", "joshi-real", "joshi-yang"}:
+            return joshi_yang_real_axis_bsm_vol(lambda uu: self._mgf_log_forward(uu, texp), texp)
+        if method in {"joshi-half", "joshi-contour", "joshi-eta-half"}:
+            return joshi_yang_contour_bsm_vol(lambda uu: self._mgf_log_forward(uu, texp), texp, eta=0.5)
+        raise ValueError(f"unknown control-variate vol method {method!r}")
+
+    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, n_cos=128, vol_method="simple"):
         """Black-Scholes correction ``BS_exact - BS_COS`` on the VG COS range."""
         return bsm_control_variate_adjustment(
             strike,
             spot,
             texp,
-            self.equivalent_bsm_vol(texp),
+            self.equivalent_bsm_vol(texp, method=vol_method),
             intr=self.intr,
             divr=self.divr,
             cp=cp,
@@ -121,10 +140,10 @@ class VgModel:
             trunc_range=self.trunc_range(texp),
         )
 
-    def price_cv(self, strike, spot, texp, cp=1, n_cos=128):
+    def price_cv(self, strike, spot, texp, cp=1, n_cos=128, vol_method="simple"):
         """VG COS price with an optional variance-matched BS control variate."""
         return self.price(strike, spot, texp, cp=cp, n_cos=n_cos) + self.bsm_control_variate_adjustment(
-            strike, spot, texp, cp=cp, n_cos=n_cos
+            strike, spot, texp, cp=cp, n_cos=n_cos, vol_method=vol_method
         )
 
     def price(self, strike, spot, texp, cp=1, n_cos=128):

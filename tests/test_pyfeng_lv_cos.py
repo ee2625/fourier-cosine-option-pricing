@@ -125,6 +125,24 @@ def test_vg_control_variate_identity_shape_and_coarse_reduction():
     assert cv_err < plain_err
 
 
+def test_vg_joshi_yang_control_variate_methods_are_opt_in():
+    m = _vg()
+    m.n_cos = 16
+    plain = m.price(VG_STRIKE, VG_SPOT, 1.0)
+
+    for method in ("joshi", "joshi-half"):
+        vol = m.equivalent_bsm_vol(1.0, method=method)
+        adj = m.bsm_control_variate_adjustment(
+            VG_STRIKE, VG_SPOT, 1.0, vol_method=method
+        )
+        cv = m.price_cv(VG_STRIKE, VG_SPOT, 1.0, vol_method=method)
+        assert vol > 0.0
+        assert abs(cv - (plain + adj)) < 1e-12
+
+    with pytest.raises(ValueError):
+        m.equivalent_bsm_vol(1.0, method="unknown")
+
+
 # 4. Put-call parity ----------------------------------------------------------
 
 def test_vg_put_call_parity():
@@ -309,6 +327,24 @@ def test_cgmy_control_variate_identity_shape_and_coarse_reduction():
     plain_err = abs(m.price(100.0, CGMY_SPOT, 1.0) - ref)
     cv_err = abs(m.price_cv(100.0, CGMY_SPOT, 1.0) - ref)
     assert cv_err < plain_err
+
+
+def test_cgmy_joshi_yang_control_variate_methods_are_opt_in():
+    m = _cgmy()
+    m.n_cos = 16
+    plain = m.price(100.0, CGMY_SPOT, 1.0)
+
+    for method in ("joshi", "joshi-half"):
+        vol = m.equivalent_bsm_vol(1.0, method=method)
+        adj = m.bsm_control_variate_adjustment(
+            100.0, CGMY_SPOT, 1.0, vol_method=method
+        )
+        cv = m.price_cv(100.0, CGMY_SPOT, 1.0, vol_method=method)
+        assert vol > 0.0
+        assert abs(cv - (plain + adj)) < 1e-12
+
+    with pytest.raises(ValueError):
+        m.equivalent_bsm_vol(1.0, method="unknown")
 
 
 # 13. Put-call parity ---------------------------------------------------------

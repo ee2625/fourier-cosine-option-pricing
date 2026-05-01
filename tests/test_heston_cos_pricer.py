@@ -125,6 +125,23 @@ def test_black_scholes_control_variate_identity_and_shape():
     assert m._bsm_cv_trunc_range(tau)[0] < m._bsm_cv_trunc_range(tau)[1]
 
 
+def test_joshi_yang_control_variate_vol_methods_are_opt_in():
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    tau = 1.0
+    N = 8
+    plain = m.price_call(100.0, tau, N=N)
+
+    for method in ("joshi", "joshi-half"):
+        vol = m.equivalent_bsm_vol(tau, method=method)
+        adj = m.bsm_control_variate_adjustment(100.0, tau, cp=1, N=N, vol_method=method)
+        cv = m.price_call_cv(100.0, tau, N=N, vol_method=method)
+        assert vol > 0.0
+        assert abs(cv - (plain + adj)) < 1e-12
+
+    with pytest.raises(ValueError):
+        m.equivalent_bsm_vol(tau, method="unknown")
+
+
 def test_black_scholes_control_variate_reduces_coarse_heston_error():
     m = HestonCOSPricer(**PAPER_PARAMS)
     plain_err = abs(m.price_call(100.0, 1.0, N=8) - REF_T1)

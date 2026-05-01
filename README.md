@@ -348,20 +348,20 @@ The presentation notebook [notebooks/tests.ipynb](notebooks/tests.ipynb) include
 
 ### Black-Scholes control variate
 
-The source Heston pricer exposes an opt-in Black-Scholes control variate via `price_cv(...)`, `price_call_cv(...)`, and `price_put_cv(...)`. The equivalent volatility is `sqrt(E[average variance])`, and the Black-Scholes COS leg uses the same Heston-style log-forward truncation range so the numerical error is comparable. VG and CGMY expose the same optional idea through variance matching, `sigma_eq = sqrt(c2/T)`, where `c2` is the second cumulant of `log(S_T/F)`. The default `price(...)` path is unchanged for every model. The same idea is mirrored in the PyFENG Heston/VG/CGMY ports through `price_cv(...)` and `price_smile_cv(...)`.
+The source Heston pricer exposes an opt-in Black-Scholes control variate via `price_cv(...)`, `price_call_cv(...)`, and `price_put_cv(...)`. The default equivalent volatility is the simple baseline: Heston uses `sqrt(E[average variance])`, while VG and CGMY use variance matching, `sigma_eq = sqrt(c2/T)`, where `c2` is the second cumulant of `log(S_T/F)`. The advanced Joshi-Yang selectors are also opt-in through `vol_method="joshi"` (real-axis derivative match, Eq. 3.5) and `vol_method="joshi-half"` (eta=1/2 contour match, Eq. 3.4). The default `price(...)` path is unchanged for every model. The same idea is mirrored in the PyFENG Heston/VG/CGMY ports through `price_cv(...)` and `price_smile_cv(...)`.
 
 ---
 
 ## Test suite
 
-Latest local validation: `188 passed, 4 skipped`.
+Latest local validation: `192 passed, 4 skipped`.
 
 The test suite covers:
 
 - BSM ([test_cos_method.py](tests/test_cos_method.py)) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases.
 - Strike-independent COS setup and JP ranges ([test_cos_method.py](tests/test_cos_method.py), [test_cos_range.py](tests/test_cos_range.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py)) — reusable smile coefficients, optional Junike-Pankrashkin Markov ranges, and PyFENG additive API consistency.
 - Heston ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py)) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation.
-- Black-Scholes control variate ([test_control_variate.py](tests/test_control_variate.py), [test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py)) — Heston average-variance equivalent volatility, VG/CGMY variance-matched volatility, correction identity, reusable-smile consistency, and coarse-grid error reduction where applicable.
+- Black-Scholes control variate ([test_control_variate.py](tests/test_control_variate.py), [test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py)) — Heston average-variance equivalent volatility, VG/CGMY variance-matched volatility, Joshi-Yang volatility selectors, correction identity, reusable-smile consistency, and coarse-grid error reduction where applicable.
 - Variance Gamma ([test_vg_model.py](tests/test_vg_model.py)) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery.
 - Lewis ([test_lewis.py](tests/test_lewis.py)) — analytic BSM agreement, geometric convergence, cross-check vs COS on Heston and VG.
 - FrFT ([test_frft.py](tests/test_frft.py)) — reduction to plain Carr-Madan when $\beta = 1/N$, analytic BSM agreement, cross-check vs COS.

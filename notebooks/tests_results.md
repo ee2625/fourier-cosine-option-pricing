@@ -346,61 +346,61 @@ display_error_table(df_t2)
       <th>0</th>
       <td>32</td>
       <td>2.04556e-05</td>
-      <td>0.0627206</td>
+      <td>0.0627098</td>
       <td>4.16003</td>
-      <td>0.0703529</td>
+      <td>0.0702485</td>
       <td>11.6747</td>
-      <td>0.107997</td>
+      <td>0.11119</td>
       <td>11.6837</td>
-      <td>0.0873535</td>
+      <td>0.0894123</td>
     </tr>
     <tr>
       <th>1</th>
       <td>64</td>
       <td>&lt; 2e-14</td>
-      <td>0.0621137</td>
+      <td>0.0648681</td>
       <td>0.0152252</td>
-      <td>0.130764</td>
+      <td>0.132726</td>
       <td>1.94114</td>
-      <td>0.111256</td>
+      <td>0.114403</td>
       <td>1.89294</td>
-      <td>0.0900837</td>
+      <td>0.0908094</td>
     </tr>
     <tr>
       <th>2</th>
       <td>128</td>
       <td>&lt; 2e-14</td>
-      <td>0.0719758</td>
+      <td>0.0736219</td>
       <td>3.52919e-06</td>
-      <td>0.394471</td>
+      <td>0.396022</td>
       <td>1.37346</td>
-      <td>0.125808</td>
+      <td>0.122351</td>
       <td>1.37366</td>
-      <td>0.0961852</td>
+      <td>0.102163</td>
     </tr>
     <tr>
       <th>3</th>
       <td>256</td>
       <td>&lt; 2e-14</td>
-      <td>0.090479</td>
+      <td>0.0908992</td>
       <td>3.90014e-10</td>
-      <td>1.42462</td>
+      <td>1.43131</td>
       <td>0.0794379</td>
-      <td>0.135665</td>
+      <td>0.137694</td>
       <td>0.0805857</td>
-      <td>0.10186</td>
+      <td>0.104141</td>
     </tr>
     <tr>
       <th>4</th>
       <td>512</td>
       <td>&lt; 2e-14</td>
-      <td>0.127043</td>
+      <td>0.128612</td>
       <td>2.0811e-10</td>
-      <td>5.46202</td>
+      <td>6.76098</td>
       <td>0.000192206</td>
-      <td>0.172622</td>
+      <td>0.176666</td>
       <td>0.00135015</td>
-      <td>0.119417</td>
+      <td>0.119177</td>
     </tr>
   </tbody>
 </table>
@@ -640,79 +640,79 @@ display_error_table(_method_table([("COS", t5_cos), ("Lewis", t5_lw), ("CM", t5_
       <th rowspan="5" valign="top">COS</th>
       <th>40</th>
       <td>0.0134213</td>
-      <td>0.0121892</td>
+      <td>0.011954</td>
     </tr>
     <tr>
       <th>80</th>
       <td>0.000134617</td>
-      <td>0.0159681</td>
+      <td>0.0157094</td>
     </tr>
     <tr>
       <th>120</th>
       <td>1.68462e-06</td>
-      <td>0.0200206</td>
+      <td>0.0201154</td>
     </tr>
     <tr>
       <th>160</th>
       <td>4.60891e-08</td>
-      <td>0.0241679</td>
+      <td>0.0247379</td>
     </tr>
     <tr>
       <th>200</th>
       <td>4.36043e-10</td>
-      <td>0.0282794</td>
+      <td>0.0282475</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
       <td>1.13144</td>
-      <td>0.0589448</td>
+      <td>0.0583906</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.0214134</td>
-      <td>0.0893321</td>
+      <td>0.0887696</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>6.89068e-06</td>
-      <td>0.151786</td>
+      <td>0.176813</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>6.24167e-10</td>
-      <td>0.312579</td>
+      <td>0.406002</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>6.24867e-10</td>
-      <td>0.587444</td>
+      <td>0.647704</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">CM</th>
       <th>512</th>
       <td>3.67341</td>
-      <td>0.155363</td>
+      <td>0.155069</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>2.42182</td>
-      <td>0.204307</td>
+      <td>0.205073</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.562918</td>
-      <td>0.308541</td>
+      <td>0.455186</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>0.0107065</td>
-      <td>0.539089</td>
+      <td>0.572633</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.44628e-06</td>
-      <td>0.927311</td>
+      <td>1.76826</td>
     </tr>
   </tbody>
 </table>
@@ -757,79 +757,79 @@ display_error_table(_method_table([("COS", t5_cos), ("Lewis", t5_lw), ("CM", t5_
       <th rowspan="5" valign="top">COS</th>
       <th>40</th>
       <td>0.322909</td>
-      <td>0.0118192</td>
+      <td>0.0143275</td>
     </tr>
     <tr>
       <th>65</th>
       <td>0.0013988</td>
-      <td>0.0144204</td>
+      <td>0.019264</td>
     </tr>
     <tr>
       <th>90</th>
       <td>5.9599e-06</td>
-      <td>0.0169317</td>
+      <td>0.0233013</td>
     </tr>
     <tr>
       <th>115</th>
       <td>2.55972e-08</td>
-      <td>0.0197525</td>
+      <td>0.0206827</td>
     </tr>
     <tr>
       <th>140</th>
       <td>9.2631e-10</td>
-      <td>0.022195</td>
+      <td>0.0256412</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">Lewis</th>
       <th>512</th>
       <td>1.13144</td>
-      <td>0.0591165</td>
+      <td>0.062511</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.0214134</td>
-      <td>0.0893721</td>
+      <td>0.096871</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>6.89099e-06</td>
-      <td>0.151345</td>
+      <td>0.168697</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>3.19403e-10</td>
-      <td>0.277501</td>
+      <td>0.466936</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.20082e-10</td>
-      <td>0.586342</td>
+      <td>1.07297</td>
     </tr>
     <tr>
       <th rowspan="5" valign="top">CM</th>
       <th>512</th>
       <td>2.08276</td>
-      <td>0.153338</td>
+      <td>0.171699</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.260573</td>
-      <td>0.203495</td>
+      <td>0.289503</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.00214501</td>
-      <td>0.307192</td>
+      <td>0.425319</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>1.38406e-07</td>
-      <td>0.521136</td>
+      <td>1.20228</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.20075e-10</td>
-      <td>0.979213</td>
+      <td>1.07673</td>
     </tr>
   </tbody>
 </table>
@@ -930,64 +930,64 @@ display_error_table(_method_table([("COS", t6_cos), ("Lewis", t6_lw), ("CM", t6_
       <th rowspan="4" valign="top">COS</th>
       <th>40</th>
       <td>0.0192133</td>
-      <td>0.0204508</td>
+      <td>0.0203027</td>
     </tr>
     <tr>
       <th>80</th>
       <td>0.000320936</td>
-      <td>0.0306333</td>
+      <td>0.0299987</td>
     </tr>
     <tr>
       <th>160</th>
       <td>1.90881e-07</td>
-      <td>0.0494433</td>
+      <td>0.0511102</td>
     </tr>
     <tr>
       <th>200</th>
       <td>4.66808e-09</td>
-      <td>0.0598181</td>
+      <td>0.0611342</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">Lewis</th>
       <th>1024</th>
       <td>0.0267668</td>
-      <td>0.425896</td>
+      <td>0.434253</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>8.6135e-06</td>
-      <td>0.773456</td>
+      <td>0.840469</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>3.94826e-08</td>
-      <td>1.81496</td>
+      <td>1.77891</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.94833e-08</td>
-      <td>3.7044</td>
+      <td>3.53587</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">CM</th>
       <th>1024</th>
       <td>2.57051</td>
-      <td>0.206342</td>
+      <td>0.21225</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>0.56432</td>
-      <td>0.359179</td>
+      <td>0.316679</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>0.0107066</td>
-      <td>0.623604</td>
+      <td>0.539015</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>3.48521e-06</td>
-      <td>1.05007</td>
+      <td>1.01568</td>
     </tr>
   </tbody>
 </table>
@@ -1346,37 +1346,37 @@ for Y, cfg in PAPER_CGMY.items():
       <th>40</th>
       <td>0.00579334</td>
       <td>0.0382</td>
-      <td>0.0638235</td>
+      <td>0.0604496</td>
     </tr>
     <tr>
       <th>60</th>
       <td>0.000491393</td>
       <td>0.000687</td>
-      <td>0.0756385</td>
+      <td>0.0638987</td>
     </tr>
     <tr>
       <th>80</th>
       <td>2.26116e-05</td>
       <td>2.11e-05</td>
-      <td>0.0766771</td>
+      <td>0.0682112</td>
     </tr>
     <tr>
       <th>100</th>
       <td>1.113e-06</td>
       <td>9.45e-07</td>
-      <td>0.0825163</td>
+      <td>0.0701673</td>
     </tr>
     <tr>
       <th>120</th>
       <td>7.80023e-08</td>
       <td>5.56e-08</td>
-      <td>0.0738529</td>
+      <td>0.0728454</td>
     </tr>
     <tr>
       <th>140</th>
       <td>2.68786e-08</td>
       <td>4.04e-09</td>
-      <td>0.0761704</td>
+      <td>0.0773544</td>
     </tr>
   </tbody>
 </table>
@@ -1418,32 +1418,32 @@ for Y, cfg in PAPER_CGMY.items():
     <tr>
       <th>512</th>
       <td>0.00837348</td>
-      <td>0.167296</td>
+      <td>0.166835</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>0.000288182</td>
-      <td>0.232349</td>
+      <td>0.246728</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>2.61792e-05</td>
-      <td>0.451114</td>
+      <td>0.379688</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>9.50286e-07</td>
-      <td>0.633728</td>
+      <td>0.64622</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.75376e-07</td>
-      <td>1.159</td>
+      <td>1.20867</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>7.26305e-08</td>
-      <td>2.21693</td>
+      <td>2.47939</td>
     </tr>
   </tbody>
 </table>
@@ -1491,37 +1491,37 @@ for Y, cfg in PAPER_CGMY.items():
       <th>40</th>
       <td>1.25469</td>
       <td>1.38</td>
-      <td>0.059221</td>
+      <td>0.0606502</td>
     </tr>
     <tr>
       <th>45</th>
       <td>0.0353538</td>
       <td>0.0198</td>
-      <td>0.05987</td>
+      <td>0.0634596</td>
     </tr>
     <tr>
       <th>50</th>
       <td>0.000121552</td>
       <td>0.000452</td>
-      <td>0.0604321</td>
+      <td>0.0639146</td>
     </tr>
     <tr>
       <th>55</th>
       <td>1.06786e-05</td>
       <td>9.59e-06</td>
-      <td>0.0609146</td>
+      <td>0.0634475</td>
     </tr>
     <tr>
       <th>60</th>
       <td>2.38234e-07</td>
       <td>1.22e-09</td>
-      <td>0.061665</td>
+      <td>0.0659919</td>
     </tr>
     <tr>
       <th>65</th>
       <td>1.68385e-07</td>
       <td>7.53e-10</td>
-      <td>0.069191</td>
+      <td>0.0853971</td>
     </tr>
   </tbody>
 </table>
@@ -1563,32 +1563,32 @@ for Y, cfg in PAPER_CGMY.items():
     <tr>
       <th>512</th>
       <td>4.54271e-05</td>
-      <td>0.162919</td>
+      <td>0.175549</td>
     </tr>
     <tr>
       <th>1024</th>
       <td>3.67881e-07</td>
-      <td>0.230896</td>
+      <td>0.258577</td>
     </tr>
     <tr>
       <th>2048</th>
       <td>3.76542e-08</td>
-      <td>0.360378</td>
+      <td>0.384268</td>
     </tr>
     <tr>
       <th>4096</th>
       <td>1.57435e-07</td>
-      <td>0.624236</td>
+      <td>1.11121</td>
     </tr>
     <tr>
       <th>8192</th>
       <td>1.62924e-07</td>
-      <td>1.2233</td>
+      <td>1.22505</td>
     </tr>
     <tr>
       <th>16384</th>
       <td>1.63523e-07</td>
-      <td>2.23256</td>
+      <td>2.96492</td>
     </tr>
   </tbody>
 </table>
@@ -1636,31 +1636,31 @@ for Y, cfg in PAPER_CGMY.items():
       <th>20</th>
       <td>403.716</td>
       <td>0.0417</td>
-      <td>0.0562473</td>
+      <td>0.0594106</td>
     </tr>
     <tr>
       <th>25</th>
       <td>0.536674</td>
       <td>0.515</td>
-      <td>0.0565879</td>
+      <td>0.0595594</td>
     </tr>
     <tr>
       <th>30</th>
       <td>0.00806645</td>
       <td>6.54e-05</td>
-      <td>0.0601685</td>
+      <td>0.0595237</td>
     </tr>
     <tr>
       <th>35</th>
       <td>0.00799418</td>
       <td>1.1e-09</td>
-      <td>0.0659935</td>
+      <td>0.0582727</td>
     </tr>
     <tr>
       <th>40</th>
       <td>0.00799418</td>
       <td>&lt; 2e-14</td>
-      <td>0.0667173</td>
+      <td>0.0603921</td>
     </tr>
   </tbody>
 </table>
@@ -2922,31 +2922,31 @@ df_smile_bench
     <tr>
       <th>0</th>
       <td>5</td>
-      <td>0.452488</td>
-      <td>0.114815</td>
-      <td>0.0510125</td>
-      <td>8.87014</td>
-      <td>2.25071</td>
+      <td>0.460432</td>
+      <td>0.117936</td>
+      <td>0.0557465</td>
+      <td>8.25938</td>
+      <td>2.11558</td>
       <td>0</td>
     </tr>
     <tr>
       <th>1</th>
       <td>25</td>
-      <td>2.23262</td>
-      <td>0.225352</td>
-      <td>0.159804</td>
-      <td>13.971</td>
-      <td>1.41018</td>
+      <td>2.29584</td>
+      <td>0.236692</td>
+      <td>0.16773</td>
+      <td>13.6877</td>
+      <td>1.41116</td>
       <td>0</td>
     </tr>
     <tr>
       <th>2</th>
       <td>101</td>
-      <td>9.08129</td>
-      <td>0.645513</td>
-      <td>0.557467</td>
-      <td>16.2903</td>
-      <td>1.15794</td>
+      <td>9.30725</td>
+      <td>0.751717</td>
+      <td>0.641778</td>
+      <td>14.5023</td>
+      <td>1.1713</td>
       <td>0</td>
     </tr>
   </tbody>
@@ -3114,7 +3114,7 @@ df_jp_ranges
 
 ## 10.3 Black-Scholes control variate
 
-The Black-Scholes control variate is now implemented as an optional COS path:
+The Black-Scholes control variate is implemented as an optional COS path:
 
 $$
 C_{model}^{CV}=C_{model}^{COS}+\left(C_{BS}^{exact}-C_{BS}^{COS}\right).
@@ -3122,12 +3122,13 @@ $$
 
 The correction term measures the COS truncation/series error in a Black-Scholes model where the exact price is known.  The key is that the Black-Scholes COS leg uses the same log-forward interval as the target model, so the correction is aimed at the same numerical range/grid error.
 
-Equivalent volatility choices used here:
+We now compare three strike-independent BS volatility choices:
 
-- Heston: $\sigma_{eq}=\sqrt{E[\bar V_T]}$, where $E[\bar V_T]=\bar v+(v_0-\bar v)(1-e^{-\kappa T})/(\kappa T)$.
-- VG/CGMY: $\sigma_{eq}=\sqrt{c_2/T}$, where $c_2$ is the second cumulant of $\log(S_T/F)$.
+- **Simple:** Heston uses $\sqrt{E[\bar V_T]}$; VG/CGMY use $\sqrt{c_2/T}$.
+- **Joshi-Yang real-axis:** Eq. (3.5), matching the first derivatives of the target and BS characteristic functions at $-i$. In MGF notation this is $\sigma^2 = 2K'(1)/T$ for $K(u)=\log E[e^{u\log(S_T/F)}]$.
+- **Joshi-Yang half-contour:** Eq. (3.4) with $\eta=1/2$, matching characteristic-function values on the common Hermitian contour.
 
-The table below shows the effect at coarse $N$.  This is intentionally opt-in: the correction helps in these coarse-grid examples, but jump models with extreme parameters, especially CGMY near $Y=2$, can behave differently.
+The table below shows the effect at coarse $N$.  This remains opt-in: Joshi-Yang improves Heston and VG in these examples, while CGMY shows that no single equivalent-vol choice dominates every jump-model regime.
 
 
 
@@ -3150,31 +3151,36 @@ cgmy_cv = CgmyModel(C=1.0, G=5.0, M=5.0, Y=0.5, intr=0.1, divr=0.0)
 cv_specs = [
     ("Heston", [8, 16, 32, 64], REFS[1.0],
      lambda N: heston_cv.price_call(100.0, 1.0, N=N),
-     lambda N: heston_cv.price_call_cv(100.0, 1.0, N=N),
-     lambda: heston_cv.equivalent_bsm_vol(1.0)),
+     lambda N, method: heston_cv.price_call_cv(100.0, 1.0, N=N, vol_method=method),
+     lambda method: heston_cv.equivalent_bsm_vol(1.0, method=method)),
     ("VG", [16, 32, 64, 128], 19.099354724,
      lambda N: vg_cv.price(90.0, 100.0, 1.0, cp=1, n_cos=N),
-     lambda N: vg_cv.price_cv(90.0, 100.0, 1.0, cp=1, n_cos=N),
-     lambda: vg_cv.equivalent_bsm_vol(1.0)),
+     lambda N, method: vg_cv.price_cv(90.0, 100.0, 1.0, cp=1, n_cos=N, vol_method=method),
+     lambda method: vg_cv.equivalent_bsm_vol(1.0, method=method)),
     ("CGMY Y=0.5", [16, 32, 64, 128], 19.8129488424,
      lambda N: cgmy_cv.price(100.0, 100.0, 1.0, cp=1, n_cos=N),
-     lambda N: cgmy_cv.price_cv(100.0, 100.0, 1.0, cp=1, n_cos=N),
-     lambda: cgmy_cv.equivalent_bsm_vol(1.0)),
+     lambda N, method: cgmy_cv.price_cv(100.0, 100.0, 1.0, cp=1, n_cos=N, vol_method=method),
+     lambda method: cgmy_cv.equivalent_bsm_vol(1.0, method=method)),
 ]
 
 cv_rows = []
 for name, n_list, ref, plain_fn, cv_fn, vol_fn in cv_specs:
+    vols = {method: vol_fn(method) for method in ["simple", "joshi", "joshi-half"]}
     for N in n_list:
         plain = plain_fn(N)
-        cv = cv_fn(N)
+        cv_simple = cv_fn(N, "simple")
+        cv_joshi = cv_fn(N, "joshi")
+        cv_half = cv_fn(N, "joshi-half")
         cv_rows.append({
             "model": name,
             "N": N,
-            "plain COS": plain,
-            "CV COS": cv,
             "plain |err|": abs(plain - ref),
-            "CV |err|": abs(cv - ref),
-            "sigma_eq": vol_fn(),
+            "simple CV |err|": abs(cv_simple - ref),
+            "JY real |err|": abs(cv_joshi - ref),
+            "JY half |err|": abs(cv_half - ref),
+            "simple vol": vols["simple"],
+            "JY real vol": vols["joshi"],
+            "JY half vol": vols["joshi-half"],
         })
 
 df_cv = pd.DataFrame(cv_rows).set_index(["model", "N"])
@@ -3202,15 +3208,19 @@ display_error_table(df_cv)
     <tr style="text-align: right;">
       <th></th>
       <th></th>
-      <th>plain COS</th>
-      <th>CV COS</th>
       <th>plain |err|</th>
-      <th>CV |err|</th>
-      <th>sigma_eq</th>
+      <th>simple CV |err|</th>
+      <th>JY real |err|</th>
+      <th>JY half |err|</th>
+      <th>simple vol</th>
+      <th>JY real vol</th>
+      <th>JY half vol</th>
     </tr>
     <tr>
       <th>model</th>
       <th>N</th>
+      <th></th>
+      <th></th>
       <th></th>
       <th></th>
       <th></th>
@@ -3222,101 +3232,125 @@ display_error_table(df_cv)
     <tr>
       <th rowspan="4" valign="top">Heston</th>
       <th>8</th>
-      <td>1.76268</td>
-      <td>5.39643</td>
       <td>4.02248</td>
       <td>0.388724</td>
+      <td>0.303819</td>
+      <td>0.342188</td>
       <td>0.169056</td>
+      <td>0.161373</td>
+      <td>0.164943</td>
     </tr>
     <tr>
       <th>16</th>
-      <td>5.11455</td>
-      <td>5.36169</td>
       <td>0.67061</td>
       <td>0.423467</td>
+      <td>0.387502</td>
+      <td>0.404497</td>
       <td>0.169056</td>
+      <td>0.161373</td>
+      <td>0.164943</td>
     </tr>
     <tr>
       <th>32</th>
-      <td>5.73152</td>
-      <td>5.73186</td>
       <td>0.0536316</td>
       <td>0.0532911</td>
+      <td>0.0529966</td>
+      <td>0.0531543</td>
       <td>0.169056</td>
+      <td>0.161373</td>
+      <td>0.164943</td>
     </tr>
     <tr>
       <th>64</th>
-      <td>5.78573</td>
-      <td>5.78573</td>
+      <td>0.000578452</td>
+      <td>0.000578452</td>
       <td>0.000578452</td>
       <td>0.000578452</td>
       <td>0.169056</td>
+      <td>0.161373</td>
+      <td>0.164943</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">VG</th>
       <th>16</th>
-      <td>18.6231</td>
-      <td>18.9427</td>
       <td>0.476249</td>
       <td>0.156658</td>
+      <td>0.128903</td>
+      <td>0.135725</td>
       <td>0.135351</td>
+      <td>0.132035</td>
+      <td>0.132832</td>
     </tr>
     <tr>
       <th>32</th>
-      <td>19.0963</td>
-      <td>19.0967</td>
       <td>0.00304306</td>
       <td>0.0026614</td>
+      <td>0.00252459</td>
+      <td>0.002561</td>
       <td>0.135351</td>
+      <td>0.132035</td>
+      <td>0.132832</td>
     </tr>
     <tr>
       <th>64</th>
-      <td>19.0993</td>
-      <td>19.0993</td>
+      <td>1.12628e-05</td>
+      <td>1.12628e-05</td>
       <td>1.12628e-05</td>
       <td>1.12628e-05</td>
       <td>0.135351</td>
+      <td>0.132035</td>
+      <td>0.132832</td>
     </tr>
     <tr>
       <th>128</th>
-      <td>19.0994</td>
-      <td>19.0994</td>
       <td>6.85777e-09</td>
       <td>6.8578e-09</td>
+      <td>6.85777e-09</td>
+      <td>6.85773e-09</td>
       <td>0.135351</td>
+      <td>0.132035</td>
+      <td>0.132832</td>
     </tr>
     <tr>
       <th rowspan="4" valign="top">CGMY Y=0.5</th>
       <th>16</th>
-      <td>10.8618</td>
-      <td>17.4642</td>
       <td>8.95118</td>
       <td>2.34875</td>
+      <td>2.92628</td>
+      <td>2.68767</td>
       <td>0.398162</td>
+      <td>0.405825</td>
+      <td>0.402596</td>
     </tr>
     <tr>
       <th>32</th>
-      <td>19.7876</td>
-      <td>19.7897</td>
       <td>0.0253781</td>
       <td>0.0232846</td>
+      <td>0.0239695</td>
+      <td>0.0237102</td>
       <td>0.398162</td>
+      <td>0.405825</td>
+      <td>0.402596</td>
     </tr>
     <tr>
       <th>64</th>
-      <td>19.8132</td>
-      <td>19.8132</td>
+      <td>0.000265881</td>
+      <td>0.000265881</td>
       <td>0.000265881</td>
       <td>0.000265881</td>
       <td>0.398162</td>
+      <td>0.405825</td>
+      <td>0.402596</td>
     </tr>
     <tr>
       <th>128</th>
-      <td>19.8129</td>
-      <td>19.8129</td>
       <td>3.16088e-08</td>
       <td>3.16102e-08</td>
+      <td>3.16096e-08</td>
+      <td>3.1609e-08</td>
       <td>0.398162</td>
+      <td>0.405825</td>
+      <td>0.402596</td>
     </tr>
   </tbody>
 </table>

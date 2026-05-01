@@ -42,21 +42,62 @@ from .sv_fft import VarGammaFft, CgmyFft
 __all__ = ["VarGammaCos", "CgmyCos"]
 
 
+def _vol_from_variance_rate(variance_rate):
+    variance_rate = float(np.real(variance_rate))
+    if not np.isfinite(variance_rate) or variance_rate <= 0.0:
+        raise ValueError(f"equivalent BS variance rate must be > 0, got {variance_rate}")
+    return float(np.sqrt(variance_rate))
+
+
+def _joshi_yang_real_axis_vol(mgf, texp, eps=1e-5):
+    """Joshi-Yang Eq. (3.5): match first derivatives at ``-i``."""
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    kp = (
+        np.log(complex(mgf(1.0 + eps)))
+        - np.log(complex(mgf(1.0 - eps)))
+    ) / (2.0 * eps)
+    return _vol_from_variance_rate(2.0 * kp.real / T)
+
+
+def _joshi_yang_half_contour_vol(mgf, texp):
+    """Joshi-Yang Eq. (3.4) on the eta=1/2 contour."""
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    log_m = np.log(complex(mgf(0.5))).real
+    return _vol_from_variance_rate(-8.0 * log_m / T)
+
+
 class _LevyBsmControlVariateMixin:
     """Optional variance-matched Black-Scholes control variate for Levy COS."""
 
     def _log_return_variance(self, texp):
         return float(self._jp_cumulants(texp, order=2)[2])
 
-    def equivalent_bsm_vol(self, texp):
-        """Variance-matched BS volatility ``sqrt(c2 / T)``."""
+    def equivalent_bsm_vol(self, texp, method="simple"):
+        """
+        Equivalent BS volatility for the control variate.
+
+        ``method="simple"`` uses variance matching.  ``"joshi"`` is the
+        Joshi-Yang real-axis derivative match, and ``"joshi-half"`` is
+        the eta=1/2 contour match.
+        """
         T = float(texp)
         if T <= 0.0:
             raise ValueError(f"texp must be > 0, got {texp}")
-        variance = self._log_return_variance(T)
-        if variance <= 0.0:
-            raise ValueError(f"log-return variance must be > 0, got {variance}")
-        return float(np.sqrt(variance / T))
+        method = method.lower()
+        if method == "simple":
+            variance = self._log_return_variance(T)
+            if variance <= 0.0:
+                raise ValueError(f"log-return variance must be > 0, got {variance}")
+            return float(np.sqrt(variance / T))
+        if method in {"joshi", "joshi-real", "joshi-yang"}:
+            return _joshi_yang_real_axis_vol(lambda uu: self.mgf_logprice(uu, T), T)
+        if method in {"joshi-half", "joshi-contour", "joshi-eta-half"}:
+            return _joshi_yang_half_contour_vol(lambda uu: self.mgf_logprice(uu, T), T)
+        raise ValueError(f"unknown control-variate vol method {method!r}")
 
     def _bsm_exact_price(self, strike, spot, texp, sigma, cp=1):
         fwd, df, _ = self._fwd_factor(spot, texp)
@@ -78,9 +119,11 @@ class _LevyBsmControlVariateMixin:
         )
         return float(price.reshape(-1)[0]) if scalar_out else price
 
-    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, trunc_range=None):
+    def bsm_control_variate_adjustment(
+        self, strike, spot, texp, cp=1, trunc_range=None, vol_method="simple"
+    ):
         """Black-Scholes correction ``BS_exact - BS_COS``."""
-        sigma_eq = self.equivalent_bsm_vol(texp)
+        sigma_eq = self.equivalent_bsm_vol(texp, method=vol_method)
         cv_range = self._truncation_range(texp) if trunc_range is None else trunc_range
 
         bs = BsmCos(
@@ -94,10 +137,10 @@ class _LevyBsmControlVariateMixin:
         bs_exact = self._bsm_exact_price(strike, spot, texp, sigma_eq, cp=cp)
         return bs_exact - bs_cos
 
-    def price_cv(self, strike, spot, texp, cp=1):
+    def price_cv(self, strike, spot, texp, cp=1, vol_method="simple"):
         """COS price with an opt-in variance-matched BS control variate."""
         return self.price(strike, spot, texp, cp=cp) + self.bsm_control_variate_adjustment(
-            strike, spot, texp, cp=cp
+            strike, spot, texp, cp=cp, vol_method=vol_method
         )
 
     def price_smile_cv(
@@ -110,6 +153,7 @@ class _LevyBsmControlVariateMixin:
         eps_tol=1e-8,
         moment_order=8,
         payoff_bound=1.0,
+        vol_method="simple",
     ):
         """Smile price using reusable coefficients plus the same-range BS CV."""
         setup = self.make_smile_setup(
@@ -121,7 +165,7 @@ class _LevyBsmControlVariateMixin:
             payoff_bound=payoff_bound,
         )
         return setup.price(strike, cp=cp) + self.bsm_control_variate_adjustment(
-            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b)
+            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b), vol_method=vol_method
         )
 
 

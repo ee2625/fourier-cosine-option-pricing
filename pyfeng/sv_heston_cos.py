@@ -58,6 +58,34 @@ from .sv_fft import HestonFft
 __all__ = ["HestonCos", "warmup_numba"]
 
 
+def _vol_from_variance_rate(variance_rate):
+    variance_rate = float(np.real(variance_rate))
+    if not np.isfinite(variance_rate) or variance_rate <= 0.0:
+        raise ValueError(f"equivalent BS variance rate must be > 0, got {variance_rate}")
+    return float(np.sqrt(variance_rate))
+
+
+def _joshi_yang_real_axis_vol(mgf, texp, eps=1e-5):
+    """Joshi-Yang Eq. (3.5): match first derivatives at ``-i``."""
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    kp = (
+        np.log(complex(mgf(1.0 + eps)))
+        - np.log(complex(mgf(1.0 - eps)))
+    ) / (2.0 * eps)
+    return _vol_from_variance_rate(2.0 * kp.real / T)
+
+
+def _joshi_yang_half_contour_vol(mgf, texp):
+    """Joshi-Yang Eq. (3.4) on the eta=1/2 contour."""
+    T = float(texp)
+    if T <= 0.0:
+        raise ValueError(f"texp must be > 0, got {texp}")
+    log_m = np.log(complex(mgf(0.5))).real
+    return _vol_from_variance_rate(-8.0 * log_m / T)
+
+
 # ============================================================================
 # Compiled kernels -- log(S_T/F) world (PyFENG convention).
 #
@@ -379,9 +407,23 @@ class HestonCos(HestonFft, CosABC):
             raise ValueError(f"mean average variance must be > 0, got {avg_var}")
         return avg_var
 
-    def equivalent_bsm_vol(self, texp):
-        """Equivalent Black-Scholes volatility ``sqrt(E[average variance])``."""
-        return float(np.sqrt(self.avg_variance_mean(texp)))
+    def equivalent_bsm_vol(self, texp, method="simple"):
+        """
+        Equivalent Black-Scholes volatility for the control variate.
+
+        ``method="simple"`` uses the average-variance shortcut.  The
+        Joshi-Yang options implement Section 3.3 of Joshi and Yang (2011):
+        ``"joshi"`` is the real-axis derivative match (Eq. 3.5), while
+        ``"joshi-half"`` is the eta=1/2 contour match (Eq. 3.4).
+        """
+        method = method.lower()
+        if method == "simple":
+            return float(np.sqrt(self.avg_variance_mean(texp)))
+        if method in {"joshi", "joshi-real", "joshi-yang"}:
+            return _joshi_yang_real_axis_vol(lambda uu: self.mgf_logprice(uu, texp), texp)
+        if method in {"joshi-half", "joshi-contour", "joshi-eta-half"}:
+            return _joshi_yang_half_contour_vol(lambda uu: self.mgf_logprice(uu, texp), texp)
+        raise ValueError(f"unknown control-variate vol method {method!r}")
 
     def truncation_interval(self, strike, spot, texp, L=None):
         """COS truncation interval used by ``price()``.
@@ -545,9 +587,11 @@ class HestonCos(HestonFft, CosABC):
         )
         return float(price.reshape(-1)[0]) if scalar_out else price
 
-    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, trunc_range=None):
+    def bsm_control_variate_adjustment(
+        self, strike, spot, texp, cp=1, trunc_range=None, vol_method="simple"
+    ):
         """Black-Scholes correction ``BS_exact - BS_COS``."""
-        sigma_eq = self.equivalent_bsm_vol(texp)
+        sigma_eq = self.equivalent_bsm_vol(texp, method=vol_method)
         cv_range = self._bsm_cv_trunc_range(texp) if trunc_range is None else trunc_range
 
         bs = BsmCos(
@@ -562,7 +606,7 @@ class HestonCos(HestonFft, CosABC):
         bs_exact = self._bsm_exact_price(strike, spot, texp, sigma_eq, cp=cp)
         return bs_exact - bs_cos
 
-    def price_cv(self, strike, spot, texp, cp=1):
+    def price_cv(self, strike, spot, texp, cp=1, vol_method="simple"):
         """
         Heston COS price with an opt-in Black-Scholes control variate.
 
@@ -571,7 +615,7 @@ class HestonCos(HestonFft, CosABC):
         ``sqrt(E[average variance])``.
         """
         return self.price(strike, spot, texp, cp=cp) + self.bsm_control_variate_adjustment(
-            strike, spot, texp, cp=cp
+            strike, spot, texp, cp=cp, vol_method=vol_method
         )
 
     def price_smile_cv(
@@ -584,6 +628,7 @@ class HestonCos(HestonFft, CosABC):
         eps_tol=1e-8,
         moment_order=8,
         payoff_bound=1.0,
+        vol_method="simple",
     ):
         """
         Smile price with reusable strike-independent coefficients plus CV.
@@ -601,7 +646,7 @@ class HestonCos(HestonFft, CosABC):
             payoff_bound=payoff_bound,
         )
         return setup.price(strike, cp=cp) + self.bsm_control_variate_adjustment(
-            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b)
+            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b), vol_method=vol_method
         )
 
     # ------------------------------------------------------------------

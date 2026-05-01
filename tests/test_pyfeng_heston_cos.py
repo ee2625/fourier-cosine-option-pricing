@@ -213,6 +213,24 @@ def test_black_scholes_control_variate_identity_and_shape():
     assert np.isfinite(a) and np.isfinite(b) and a < b
 
 
+def test_joshi_yang_control_variate_vol_methods_are_opt_in():
+    m = _make()
+    m.n_cos = 8
+    plain = m.price(STRIKE, SPOT, 1.0)
+
+    for method in ("joshi", "joshi-half"):
+        vol = m.equivalent_bsm_vol(1.0, method=method)
+        adj = m.bsm_control_variate_adjustment(
+            STRIKE, SPOT, 1.0, vol_method=method
+        )
+        cv = m.price_cv(STRIKE, SPOT, 1.0, vol_method=method)
+        assert vol > 0.0
+        assert abs(cv - (plain + adj)) < 1e-12
+
+    with pytest.raises(ValueError):
+        m.equivalent_bsm_vol(1.0, method="unknown")
+
+
 def test_black_scholes_control_variate_reduces_coarse_heston_error():
     m = _make()
     m.n_cos = 8
