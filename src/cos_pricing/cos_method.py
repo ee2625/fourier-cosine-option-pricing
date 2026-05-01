@@ -51,12 +51,12 @@ class CosSmileSetup:
         scalar_out = strike_a.shape == ()
 
         strike_flat = np.atleast_1d(strike_a).reshape(-1)
-        cp_flat = np.atleast_1d(cp_a).reshape(-1)
+        cp_payoff = float(cp) if np.ndim(cp) == 0 else np.atleast_1d(cp_a).reshape(-1)
         kk = strike_flat / self.fwd
 
         w_payoff = _vanilla_payoff_matrix(
             kk=kk,
-            cp=cp_flat,
+            cp=cp_payoff,
             a=self.a,
             b=self.b,
             u_arr=self.u_arr,
@@ -277,10 +277,18 @@ def _vanilla_payoff_matrix(kk, cp, a, b, u_arr):
     payoff logic in ``cos_price`` while accepting already-built frequencies.
     """
     kk = np.atleast_1d(np.asarray(kk, dtype=float)).reshape(-1)
-    cp_a = np.broadcast_to(
-        np.atleast_1d(np.asarray(cp, dtype=float)).reshape(-1),
-        kk.shape,
-    )
+    if np.ndim(cp) == 0:
+        cp_val = float(cp)
+        all_calls = cp_val > 0
+        all_puts = cp_val < 0
+        cp_a = None
+    else:
+        cp_a = np.broadcast_to(
+            np.atleast_1d(np.asarray(cp, dtype=float)).reshape(-1),
+            kk.shape,
+        )
+        all_calls = bool(np.all(cp_a > 0))
+        all_puts = bool(np.all(cp_a < 0))
 
     n_cos = len(u_arr)
     ba = b - a
@@ -299,9 +307,6 @@ def _vanilla_payoff_matrix(kk, cp, a, b, u_arr):
     exp_a = np.exp(a)
     inv_1u2 = 1.0 / (1.0 + u_arr**2)
 
-    all_calls = bool(np.all(cp_a > 0))
-    all_puts = bool(np.all(cp_a < 0))
-
     if all_calls:
         chi = (sign_k * exp_b - kk_c * (cos_ph + u * sin_ph)) * inv_1u2
         psi = np.where(k == 0, b - log_kk, -sin_ph / safe_u)
@@ -319,6 +324,8 @@ def _vanilla_payoff_matrix(kk, cp, a, b, u_arr):
     delta = np.broadcast_to((2.0 / ba) * chi_full, (len(kk), n_cos)).copy()
     delta[:, 0] -= 2.0 * kk
     w_put = w_call - delta
+    if cp_a is None:
+        cp_a = np.full(kk.shape, cp_val)
     return np.where(cp_a[:, None] > 0, w_call, w_put)
 
 

@@ -340,6 +340,10 @@ Changes 4–5 make the warm runtime fast; change 7 makes the cold runtime fast; 
 
 A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile. Passing `trunc_range="jp"` requests the optional Junike-Pankrashkin Markov range for models with analytic high-order cumulants.
 
+### Strike-independent smile benchmark
+
+[`examples/strike_independent_smile_benchmark.py`](examples/strike_independent_smile_benchmark.py) compares three smile-pricing paths: a scalar per-strike loop, the existing vectorized `price(...)`, and the reusable `make_cos_smile_setup(...).price(...)` path. The benchmark is intentionally diagnostic: scalar loops show the clearest speedup from coefficient reuse, while the vectorized path is already efficient and mostly pays the remaining payoff-matrix cost.
+
 ---
 
 ## Test suite
