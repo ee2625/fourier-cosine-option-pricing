@@ -164,6 +164,26 @@ def test_strike_vectorized_matches_scalar():
     assert np.max(np.abs(vec - scal)) < 1e-12
 
 
+def test_price_smile_matches_price_in_log_forward_range():
+    m = _make()
+    m.n_cos = 160
+    strikes = np.array([90.0, 95.0, 100.0, 105.0, 110.0])
+    cp = np.array([1, -1, 1, -1, 1])
+
+    got = m.price_smile(strikes, SPOT, 1.0, cp=cp)
+    ref = m.price(strikes, SPOT, 1.0, cp=cp)
+
+    assert got.shape == strikes.shape
+    assert np.max(np.abs(got - ref)) < 1e-7
+
+    # Heston's paper interval is per-strike in y=log(S_T/K).  The reusable
+    # smile setup uses the equivalent z=log(S_T/F) range.
+    a_z, b_z = m._smile_truncation_range(1.0)
+    a_y, b_y, x, _ = m.truncation_interval(STRIKE, SPOT, 1.0)
+    assert abs((a_y - x) - a_z) < 1e-12
+    assert abs((b_y - x) - b_z) < 1e-12
+
+
 def test_scalar_in_scalar_out():
     m = _make()
     out = m.price(STRIKE, SPOT, 1.0)

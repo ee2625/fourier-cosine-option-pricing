@@ -308,7 +308,7 @@ src/cos_pricing/
 ├── frft.py                    Bailey-Swarztrauber fractional FFT
 └── bermudan.py                Bermudan COS (Fang-Oosterlee 2009)
 
-pyfeng/sv_cos.py               PyFENG-compatible port (CosABC, BsmCos, HestonCos)
+pyfeng/sv_cos.py               PyFENG-compatible port (CosABC, BsmCos, CosSmileSetup, HestonCos)
 ```
 
 ### Core formula (paper Eq. 21)
@@ -338,13 +338,13 @@ Changes 4–5 make the warm runtime fast; change 7 makes the cold runtime fast; 
 
 ### PyFENG integration
 
-A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`.
+A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile.
 
 ---
 
 ## Test suite
 
-**174/174 tests pass:**
+The test suite covers:
 
 - BSM ([test_cos_method.py](tests/test_cos_method.py)) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases.
 - Heston ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py)) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation.

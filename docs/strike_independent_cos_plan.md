@@ -11,7 +11,7 @@ Goal: price a whole volatility smile with one COS density setup instead of rebui
    - `cos_price_smile(...)`
 3. Validate the setup path against the existing COS engine using the same fixed truncation range.
 4. Only after that, add improved truncation-range selection such as Junike-Pankrashkin (2022).
-5. Only after standalone tests pass, wire the same concept into PyFENG classes as an additive `price_smile(...)` path.
+5. Wire the same concept into PyFENG classes as an additive `price_smile(...)` path.
 
 ## What Is Reused
 
@@ -31,6 +31,20 @@ Implemented first with an explicit or legacy truncation range only. This intenti
 - Junike-Pankrashkin error-controlled range selection
 
 The first milestone is correct when `cos_price_smile(...)` matches `cos_price(...)` for the same `[a, b]` and `N`.
+
+## PyFENG Milestone
+
+Implemented as an additive interface on the PyFENG COS classes:
+
+- `make_smile_setup(spot, texp, trunc_range=None)`
+- `CosSmileSetup.price(strike, cp=...)`
+- `price_smile(strike, spot, texp, cp=..., trunc_range=None)`
+
+The legacy `price(...)` methods are unchanged.  For BSM, VG, and CGMY,
+the setup uses each model's existing strike-independent truncation range
+unless an explicit range is supplied.  For Heston, the setup uses the same
+F&O half-width as the Numba-backed `price(...)`, but translated into the
+strike-independent log-forward variable `log(S_T/F)`.
 
 ## Next Milestone
 

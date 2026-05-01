@@ -79,6 +79,29 @@ def test_vg_strike_vectorized_matches_scalar():
     assert np.max(np.abs(vec - scal)) < 1e-12
 
 
+def test_vg_price_smile_matches_price_and_reuses_setup():
+    m = _vg()
+    m.n_cos = 256
+    strikes = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+    cp = np.array([1, -1, 1, -1, 1])
+
+    setup = m.make_smile_setup(VG_SPOT, 1.0)
+    via_setup = setup.price(strikes, cp=cp)
+    via_convenience = m.price_smile(strikes, VG_SPOT, 1.0, cp=cp)
+    legacy = m.price(strikes, VG_SPOT, 1.0, cp=cp)
+
+    assert setup.n_cos == 256
+    assert setup.cf_re.shape == (256,)
+    assert np.max(np.abs(via_setup - legacy)) < 1e-12
+    assert np.max(np.abs(via_convenience - legacy)) < 1e-12
+
+    # The setup owns its grid, so later model-level n_cos changes do not
+    # mutate already cached density coefficients.
+    m.n_cos = 64
+    assert setup.n_cos == 256
+    assert np.max(np.abs(setup.price(strikes, cp=cp) - via_setup)) < 1e-14
+
+
 # 4. Put-call parity ----------------------------------------------------------
 
 def test_vg_put_call_parity():
@@ -228,6 +251,19 @@ def test_cgmy_strike_vectorized_matches_scalar():
     # single-ulp summation difference (~5e-12 observed) that has no
     # mathematical content.
     assert np.max(np.abs(vec - scal)) < 1e-10
+
+
+def test_cgmy_price_smile_matches_price():
+    m = _cgmy()
+    m.n_cos = 512
+    strikes = np.array([80.0, 90.0, 100.0, 110.0, 120.0])
+    cp = np.array([-1, -1, 1, 1, 1])
+
+    got = m.price_smile(strikes, CGMY_SPOT, 1.0, cp=cp)
+    ref = m.price(strikes, CGMY_SPOT, 1.0, cp=cp)
+
+    assert got.shape == strikes.shape
+    assert np.max(np.abs(got - ref)) < 1e-10
 
 
 # 13. Put-call parity ---------------------------------------------------------

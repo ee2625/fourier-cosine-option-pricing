@@ -18,7 +18,8 @@ Both classes use multiple inheritance ``(<Fft sibling>, CosABC)``.  MRO
 would otherwise route ``price()`` through ``FftABC``, so each class
 explicitly binds ``price = CosABC.price`` to use the COS dot product
 instead of the FFT integration.  All other COS hooks
-(``_truncation_range``, ``_cos_grid``, ``_density_coefficients``,
+(``make_smile_setup``, ``price_smile``, ``_truncation_range``,
+``_cos_grid``, ``_density_coefficients``,
 ``_vanilla_payoff_coefficients``) come from ``CosABC`` via the MRO.
 
 References:
@@ -77,6 +78,8 @@ class VarGammaCos(VarGammaFft, CosABC):
 
     # MRO routes price() through FftABC by default; rebind to the COS path.
     price = CosABC.price
+    make_smile_setup = CosABC.make_smile_setup
+    price_smile = CosABC.price_smile
 
     def __init__(self, sigma, vov, theta=0.0, **kwargs):
         """Pre-validate sigma > 0, vov > 0 before delegating to VarGammaFft.
@@ -174,6 +177,8 @@ class CgmyCos(CgmyFft, CosABC):
 
     # MRO routes price() through FftABC by default; rebind to the COS path.
     price = CosABC.price
+    make_smile_setup = CosABC.make_smile_setup
+    price_smile = CosABC.price_smile
 
     def mgf_logprice(self, uu, texp):
         """Wrap CgmyFft.mgf_logprice to handle scalar inputs.

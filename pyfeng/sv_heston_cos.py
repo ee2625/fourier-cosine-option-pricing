@@ -409,6 +409,47 @@ class HestonCos(HestonFft, CosABC):
         a, b, _, _ = self.truncation_interval(strike, spot, texp)
         return a, b
 
+    def _smile_truncation_range(self, texp, L=None):
+        """
+        Strike-independent Heston interval in log(S_T/F) coordinates.
+
+        ``truncation_interval(...)`` reports the paper's per-strike
+        interval for y = log(S_T/K): ``log(F/K) + c1 +/- L*sigma_h``.
+        For the reusable smile setup we work in z = log(S_T/F), so the
+        equivalent interval is simply ``c1 +/- L*sigma_h`` and the strike
+        only enters through the payoff boundary ``log(K/F)``.
+        """
+        L_value = self._resolve_L(texp) if L is None else float(L)
+        half = L_value * self._sigma_h()
+        center = self._c1_logF(texp)
+        return center - half, center + half
+
+    def make_smile_setup(self, spot, texp, trunc_range=None):
+        """
+        Build reusable strike-independent Heston COS coefficients.
+
+        If ``trunc_range`` is omitted, this uses the same Heston-tailored
+        F&O half-width as ``price(...)``, translated from y = log(S_T/K)
+        to the strike-independent z = log(S_T/F) variable.
+        """
+        if trunc_range is None:
+            trunc_range = self._smile_truncation_range(texp)
+        return CosABC.make_smile_setup(
+            self, spot, texp, trunc_range=trunc_range
+        )
+
+    def price_smile(self, strike, spot, texp, cp=1, trunc_range=None):
+        """
+        European Heston prices through a reusable strike-independent setup.
+
+        This convenience method is intentionally separate from ``price``:
+        the existing Numba-backed implementation remains the default path,
+        while this method exposes the reusable density coefficients needed
+        for volatility-smile experiments.
+        """
+        setup = self.make_smile_setup(spot, texp, trunc_range=trunc_range)
+        return setup.price(strike, cp=cp)
+
     # ------------------------------------------------------------------
     # Cumulants (MGF inherited from HestonFft via MRO)
     # ------------------------------------------------------------------
