@@ -31,6 +31,11 @@ from .cos_range import (
     jp_markov_half_width,
     jp_markov_range,
 )
+from .control_variate import (
+    bsm_control_variate_adjustment,
+    heston_average_variance_mean,
+    heston_equivalent_bsm_vol,
+)
 
 __all__ = [
     "cos_price",
@@ -56,4 +61,7 @@ __all__ = [
     "central_moment_from_cumulants",
     "jp_markov_half_width",
     "jp_markov_range",
+    "bsm_control_variate_adjustment",
+    "heston_average_variance_mean",
+    "heston_equivalent_bsm_vol",
 ]

@@ -35,6 +35,7 @@ References:
 """
 
 import numpy as np
+from scipy.stats import norm
 
 try:
     from numba import njit
@@ -50,7 +51,7 @@ except ImportError:
             return fn
         return deco
 
-from .sv_cos import CosABC
+from .sv_cos import BsmCos, CosABC
 from .sv_fft import HestonFft
 
 
@@ -356,7 +357,31 @@ class HestonCos(HestonFft, CosABC):
         re-deriving the closed form.
         """
         T = float(texp)
-        return -0.5 * T * self.avgvar_mv(T)[0]
+        return -0.5 * T * self.avg_variance_mean(T)
+
+    def avg_variance_mean(self, texp):
+        """Mean Heston average variance over ``[0, texp]``.
+
+        This delegates to PyFENG's existing ``avgvar_mv`` helper, so the
+        control-variate volatility stays consistent with the upstream
+        Heston model.
+        """
+        if texp <= 0.0:
+            raise ValueError(f"texp must be > 0, got {texp}")
+        avg_var = np.asarray(self.avgvar_mv(float(texp))[0], dtype=float)
+        if avg_var.size != 1:
+            raise ValueError(
+                "avg_variance_mean expects scalar texp/model parameters; "
+                f"got average-variance shape {avg_var.shape}."
+            )
+        avg_var = float(avg_var.reshape(-1)[0])
+        if avg_var <= 0.0:
+            raise ValueError(f"mean average variance must be > 0, got {avg_var}")
+        return avg_var
+
+    def equivalent_bsm_vol(self, texp):
+        """Equivalent Black-Scholes volatility ``sqrt(E[average variance])``."""
+        return float(np.sqrt(self.avg_variance_mean(texp)))
 
     def truncation_interval(self, strike, spot, texp, L=None):
         """COS truncation interval used by ``price()``.
@@ -480,6 +505,104 @@ class HestonCos(HestonFft, CosABC):
             payoff_bound=payoff_bound,
         )
         return setup.price(strike, cp=cp)
+
+    # ------------------------------------------------------------------
+    # Black-Scholes control variate -- optional correction path
+    # ------------------------------------------------------------------
+
+    def _bsm_cv_trunc_range(self, texp, L=None):
+        """
+        Black-Scholes control-variate interval in log(S_T/F).
+
+        The correction uses the same Heston-style center and half-width as
+        the target COS call.  That makes the correction target the same
+        truncation/series error rather than a different BS-only interval.
+        """
+        L_value = self._resolve_L(texp) if L is None else float(L)
+        center = -0.5 * float(texp) * self.avg_variance_mean(texp)
+        half = L_value * self._sigma_h()
+        return center - half, center + half
+
+    def _bsm_exact_price(self, strike, spot, texp, sigma, cp=1):
+        """Closed-form BSM price using PyFENG's forward/discount convention."""
+        fwd, df, _ = self._fwd_factor(spot, texp)
+        fwd = float(np.asarray(fwd, dtype=float).reshape(-1)[0])
+        df = float(np.asarray(df, dtype=float).reshape(-1)[0])
+
+        strike_a, cp_a = np.broadcast_arrays(
+            np.asarray(strike, dtype=float),
+            np.asarray(cp, dtype=float),
+        )
+        scalar_out = strike_a.shape == ()
+
+        sqt = float(sigma) * np.sqrt(float(texp))
+        if sqt <= 0.0:
+            raise ValueError(f"sigma*sqrt(texp) must be > 0, got {sqt}")
+        d1 = np.log(fwd / strike_a) / sqt + 0.5 * sqt
+        d2 = d1 - sqt
+        price = df * cp_a * (
+            fwd * norm.cdf(cp_a * d1) - strike_a * norm.cdf(cp_a * d2)
+        )
+        return float(price.reshape(-1)[0]) if scalar_out else price
+
+    def bsm_control_variate_adjustment(self, strike, spot, texp, cp=1, trunc_range=None):
+        """Black-Scholes correction ``BS_exact - BS_COS``."""
+        sigma_eq = self.equivalent_bsm_vol(texp)
+        cv_range = self._bsm_cv_trunc_range(texp) if trunc_range is None else trunc_range
+
+        bs = BsmCos(
+            sigma=sigma_eq,
+            intr=self.intr,
+            divr=self.divr,
+            is_fwd=self.is_fwd,
+        )
+        bs.n_cos = int(self.n_cos)
+
+        bs_cos = bs.price_smile(strike, spot, texp, cp=cp, trunc_range=cv_range)
+        bs_exact = self._bsm_exact_price(strike, spot, texp, sigma_eq, cp=cp)
+        return bs_exact - bs_cos
+
+    def price_cv(self, strike, spot, texp, cp=1):
+        """
+        Heston COS price with an opt-in Black-Scholes control variate.
+
+        The standard ``price(...)`` method is unchanged. This helper adds
+        ``BS_exact - BS_COS`` with equivalent volatility
+        ``sqrt(E[average variance])``.
+        """
+        return self.price(strike, spot, texp, cp=cp) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp
+        )
+
+    def price_smile_cv(
+        self,
+        strike,
+        spot,
+        texp,
+        cp=1,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
+        """
+        Smile price with reusable strike-independent coefficients plus CV.
+
+        Building the setup first gives us the actual scalar interval used
+        by ``price_smile`` (including ``trunc_range="jp"``), then the
+        Black-Scholes COS leg uses that same interval.
+        """
+        setup = self.make_smile_setup(
+            spot,
+            texp,
+            trunc_range=trunc_range,
+            eps_tol=eps_tol,
+            moment_order=moment_order,
+            payoff_bound=payoff_bound,
+        )
+        return setup.price(strike, cp=cp) + self.bsm_control_variate_adjustment(
+            strike, spot, texp, cp=cp, trunc_range=(setup.a, setup.b)
+        )
 
     # ------------------------------------------------------------------
     # Cumulants (MGF inherited from HestonFft via MRO)

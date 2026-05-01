@@ -47,6 +47,10 @@ def _make(intr=0.0, divr=0.0, **overrides):
     return HestonCos(**params)
 
 
+def _scalar(value):
+    return float(np.asarray(value, dtype=float).reshape(-1)[0])
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Install / wiring smoke test (priority: catches the namespace shadow problem)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +186,56 @@ def test_price_smile_matches_price_in_log_forward_range():
     a_y, b_y, x, _ = m.truncation_interval(STRIKE, SPOT, 1.0)
     assert abs((a_y - x) - a_z) < 1e-12
     assert abs((b_y - x) - b_z) < 1e-12
+
+
+def test_average_variance_equivalent_vol():
+    m = _make()
+    texp = 1.0
+    avg_var = _scalar(m.avgvar_mv(texp)[0])
+
+    assert abs(m.avg_variance_mean(texp) - avg_var) < 1e-15
+    assert abs(m.equivalent_bsm_vol(texp) - np.sqrt(avg_var)) < 1e-15
+
+
+def test_black_scholes_control_variate_identity_and_shape():
+    m = _make()
+    m.n_cos = 32
+    strikes = np.array([90.0, 100.0, 110.0])
+    cp = np.array([1, -1, 1])
+
+    plain = m.price(strikes, SPOT, 1.0, cp=cp)
+    adj = m.bsm_control_variate_adjustment(strikes, SPOT, 1.0, cp=cp)
+    cv = m.price_cv(strikes, SPOT, 1.0, cp=cp)
+
+    assert cv.shape == strikes.shape
+    assert np.max(np.abs(cv - (plain + adj))) < 1e-12
+    a, b = m._bsm_cv_trunc_range(1.0)
+    assert np.isfinite(a) and np.isfinite(b) and a < b
+
+
+def test_black_scholes_control_variate_reduces_coarse_heston_error():
+    m = _make()
+    m.n_cos = 8
+
+    plain_err = abs(m.price(STRIKE, SPOT, 1.0) - REF_T1)
+    cv_err = abs(m.price_cv(STRIKE, SPOT, 1.0) - REF_T1)
+
+    assert cv_err < 0.2 * plain_err
+
+
+def test_price_smile_cv_uses_same_setup_range():
+    m = _make()
+    m.n_cos = 32
+    strikes = np.array([90.0, 100.0, 110.0])
+    setup = m.make_smile_setup(SPOT, 1.0)
+
+    got = m.price_smile_cv(strikes, SPOT, 1.0)
+    expected = setup.price(strikes) + m.bsm_control_variate_adjustment(
+        strikes, SPOT, 1.0, trunc_range=(setup.a, setup.b)
+    )
+
+    assert got.shape == strikes.shape
+    assert np.max(np.abs(got - expected)) < 1e-12
 
 
 def test_scalar_in_scalar_out():

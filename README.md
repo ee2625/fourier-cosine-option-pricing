@@ -338,7 +338,7 @@ Changes 4–5 make the warm runtime fast; change 7 makes the cold runtime fast; 
 
 ### PyFENG integration
 
-A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile. Passing `trunc_range="jp"` requests the optional Junike-Pankrashkin Markov range for models with analytic high-order cumulants.
+A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile. Passing `trunc_range="jp"` requests the optional Junike-Pankrashkin Markov range for models with analytic high-order cumulants. The Heston PyFENG port also has optional `price_cv(...)` / `price_smile_cv(...)` Black-Scholes control-variate helpers.
 
 ### Strike-independent smile benchmark
 
@@ -346,17 +346,22 @@ A version of this implementation integrated into [PyFENG](https://github.com/PyF
 
 The presentation notebook [notebooks/tests.ipynb](notebooks/tests.ipynb) includes the same post-presentation extension section, and the readable export is [notebooks/tests_results.md](notebooks/tests_results.md).
 
+### Black-Scholes control variate
+
+The source Heston pricer exposes an opt-in Black-Scholes control variate via `price_cv(...)`, `price_call_cv(...)`, and `price_put_cv(...)`. The equivalent volatility is `sqrt(E[average variance])`, and the Black-Scholes COS leg uses the same Heston-style log-forward truncation range so the numerical error is comparable. The default `price(...)` path is unchanged. The same idea is mirrored in the PyFENG Heston port through `price_cv(...)` and `price_smile_cv(...)`.
+
 ---
 
 ## Test suite
 
-Latest local validation: `181 passed, 4 skipped`.
+Latest local validation: `184 passed, 4 skipped`.
 
 The test suite covers:
 
 - BSM ([test_cos_method.py](tests/test_cos_method.py)) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases.
 - Strike-independent COS setup and JP ranges ([test_cos_method.py](tests/test_cos_method.py), [test_cos_range.py](tests/test_cos_range.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py)) — reusable smile coefficients, optional Junike-Pankrashkin Markov ranges, and PyFENG additive API consistency.
 - Heston ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py)) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation.
+- Black-Scholes control variate ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py)) — Heston average-variance equivalent volatility, correction identity, reusable-smile consistency, and coarse-grid error reduction.
 - Variance Gamma ([test_vg_model.py](tests/test_vg_model.py)) — CF properties, cumulants, COS convergence, Carr-Madan agreement, density recovery.
 - Lewis ([test_lewis.py](tests/test_lewis.py)) — analytic BSM agreement, geometric convergence, cross-check vs COS on Heston and VG.
 - FrFT ([test_frft.py](tests/test_frft.py)) — reduction to plain Carr-Madan when $\beta = 1/N$, analytic BSM agreement, cross-check vs COS.

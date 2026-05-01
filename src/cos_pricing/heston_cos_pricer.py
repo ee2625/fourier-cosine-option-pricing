@@ -37,6 +37,12 @@ Reference:
 import numpy as np
 from numba import njit
 
+from .control_variate import (
+    bsm_control_variate_adjustment,
+    heston_average_variance_mean,
+    heston_equivalent_bsm_vol,
+)
+
 
 # ============================================================================
 # Compiled kernels -- the actual computation. No class, no caching.
@@ -345,6 +351,67 @@ class HestonCOSPricer:
     def price_put(self, K, tau, N=160, L=None):
         """Put price via COS; thin wrapper over price(..., cp=-1)."""
         return self.price(K, tau, cp=-1, N=N, L=L)
+
+    # ------------------------------------------------------------------------
+    # Black-Scholes control variate -- optional correction path
+    # ------------------------------------------------------------------------
+
+    def avg_variance_mean(self, tau):
+        """Mean of the Heston average variance over ``[0, tau]``."""
+        return heston_average_variance_mean(self.v0, self.lam, self.ubar, tau)
+
+    def equivalent_bsm_vol(self, tau):
+        """Equivalent BS volatility ``sqrt(E[average variance])``."""
+        return heston_equivalent_bsm_vol(self.v0, self.lam, self.ubar, tau)
+
+    def _bsm_cv_trunc_range(self, tau, L=None):
+        """
+        BS control-variate range in log(S_T/F).
+
+        Heston's kernel interval is centered per strike in log(S_T/K).
+        In the log-forward variable, the equivalent center is
+        ``-0.5 * E[Vbar_T] * tau`` and the half-width is the same
+        Heston sigma-h width used by the target COS call.
+        """
+        L_value = self._default_L(tau) if L is None else float(L)
+        avg_var = self.avg_variance_mean(tau)
+        center = -0.5 * avg_var * tau
+        half = L_value * self._sigma_h
+        return center - half, center + half
+
+    def bsm_control_variate_adjustment(self, K, tau, cp=1, N=160, L=None):
+        """Black-Scholes correction ``BS_exact - BS_COS``."""
+        sigma_eq = self.equivalent_bsm_vol(tau)
+        return bsm_control_variate_adjustment(
+            K,
+            self.S0,
+            tau,
+            sigma_eq,
+            intr=self.r,
+            divr=self.q,
+            cp=cp,
+            n_cos=N,
+            trunc_range=self._bsm_cv_trunc_range(tau, L=L),
+        )
+
+    def price_cv(self, K, tau, cp=1, N=160, L=None):
+        """
+        Heston COS price with a Black-Scholes control-variate correction.
+
+        The legacy ``price`` method remains unchanged; this is opt-in while
+        we evaluate where the correction is helpful.
+        """
+        return self.price(K, tau, cp=cp, N=N, L=L) + self.bsm_control_variate_adjustment(
+            K, tau, cp=cp, N=N, L=L
+        )
+
+    def price_call_cv(self, K, tau, N=160, L=None):
+        """Call price with the optional BS control variate."""
+        return self.price_cv(K, tau, cp=1, N=N, L=L)
+
+    def price_put_cv(self, K, tau, N=160, L=None):
+        """Put price with the optional BS control variate."""
+        return self.price_cv(K, tau, cp=-1, N=N, L=L)
 
     # ------------------------------------------------------------------------
     # NumPy-reference helpers -- preserved for inspection and existing tests.

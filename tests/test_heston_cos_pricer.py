@@ -7,7 +7,7 @@ Run:
 
 import numpy as np
 import pytest
-from cos_pricing import HestonCOSPricer
+from cos_pricing import HestonCOSPricer, heston_average_variance_mean
 
 
 PAPER_PARAMS = dict(
@@ -95,6 +95,42 @@ def test_non_negative_prices():
     strikes = np.linspace(60, 200, 15)
     prices  = m.price_call(strikes, 1.0, N=160)
     assert np.all(prices >= -1e-10)
+
+
+def test_average_variance_equivalent_vol():
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    tau = 1.3
+    expected = (
+        m.ubar
+        + (m.v0 - m.ubar) * (1.0 - np.exp(-m.lam * tau)) / (m.lam * tau)
+    )
+
+    assert abs(m.avg_variance_mean(tau) - expected) < 1e-15
+    assert abs(heston_average_variance_mean(m.v0, m.lam, m.ubar, tau) - expected) < 1e-15
+    assert abs(m.equivalent_bsm_vol(tau) - np.sqrt(expected)) < 1e-15
+
+
+def test_black_scholes_control_variate_identity_and_shape():
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    strikes = np.array([90.0, 100.0, 110.0])
+    tau = 1.0
+    N = 32
+
+    plain = m.price_call(strikes, tau, N=N)
+    adj = m.bsm_control_variate_adjustment(strikes, tau, cp=1, N=N)
+    cv = m.price_call_cv(strikes, tau, N=N)
+
+    assert cv.shape == strikes.shape
+    assert np.max(np.abs(cv - (plain + adj))) < 1e-12
+    assert m._bsm_cv_trunc_range(tau)[0] < m._bsm_cv_trunc_range(tau)[1]
+
+
+def test_black_scholes_control_variate_reduces_coarse_heston_error():
+    m = HestonCOSPricer(**PAPER_PARAMS)
+    plain_err = abs(m.price_call(100.0, 1.0, N=8) - REF_T1)
+    cv_err = abs(m.price_call_cv(100.0, 1.0, N=8) - REF_T1)
+
+    assert cv_err < 0.2 * plain_err
 
 
 # ─────────────────────────────────────────────────────────────────────────────
