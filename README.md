@@ -4,7 +4,26 @@ Implementation of the Fang–Oosterlee COS method for European option pricing in
 
 **Reference paper.** Fang, F. and Oosterlee, C.W. *A Novel Pricing Method for European Options Based on Fourier-Cosine Series Expansions.* SIAM J. Sci. Comput. 31(2):826–848, 2008. <https://doi.org/10.1137/080718061>
 
-**What this repo covers.** Reproduction and diagnostics for the Fang-Oosterlee benchmark tables (BSM, Heston, Variance Gamma, CGMY), with the CGMY $Y=1.98$ case called out as an unresolved caveat; a four-way comparison of the COS method against three other CF-based pricers (Lewis 2001, Carr-Madan, fractional FFT); the early-exercise extension from the Fang-Oosterlee 2009 follow-up paper; and structural π-symmetry verification across all four models.
+**What this repo covers.** This project started as a reproduction of the Fang-Oosterlee COS pricing paper and was extended into a broader Fourier-pricing toolkit. It includes:
+
+- Reproduction and diagnostics for the Fang-Oosterlee BSM, Heston, Variance Gamma, and CGMY benchmark tables.
+- A four-way comparison of COS against Lewis (2001), Carr-Madan FFT, and fractional FFT, including damping/convergence tradeoffs.
+- A Numba-accelerated Heston COS implementation with caching and stability improvements.
+- A PyFENG-compatible COS integration for BSM, Heston, VG, CGMY, FrFT, and Bermudan pricing.
+- Strike-independent smile setup APIs that reuse COS density coefficients across many strikes.
+- Optional Junike-Pankrashkin truncation ranges for models with analytic high-order cumulants.
+- Optional Black-Scholes control variates, including simple variance matching and Joshi-Yang volatility selectors.
+- Bermudan put/call pricing via the Fang-Oosterlee 2009 backward-induction extension.
+- Dimensional-analysis / Buckingham-π invariance tests across all four model families.
+- Fixed-seed randomized robustness tests for finite prices and put-call parity.
+
+The CGMY $Y=1.98$ case is kept as a documented numerical-convention caveat rather than presented as a clean reproduction.
+
+The default `price(...)` path remains the baseline Fang-Oosterlee COS implementation; post-presentation additions such as strike-independent smile setup, Junike-Pankrashkin ranges, and Black-Scholes control variates are additive and opt-in.
+
+## Known caveats
+
+- **CGMY $Y=1.98$ Table 10.** We do not present this near-stable CGMY case as an exact reproduction. With the paper's stated range $[-100,20]$, our strict martingale convention converges to about `0.2601`, while the paper prints `0.252104475`. The notebook keeps this visible as a numerical-convention/reference caveat.
 
 ## Quick start
 
@@ -12,6 +31,7 @@ Implementation of the Fang–Oosterlee COS method for European option pricing in
 git clone https://github.com/ee2625/fourier-cosine-option-pricing.git
 cd fourier-cosine-option-pricing
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ```python
@@ -65,7 +85,7 @@ GBM with $\sigma = 0.25$, $r = 0.1$, $q = 0$, $T = 0.1$, spot 100, strikes $\{80
 | Carr-Madan | msec | 0.0890 | 0.0909 | 0.0978 | 0.1037 | 0.1207 |
 |  | max error | 1.17e+01 | 1.89e+00 | 1.37e+00 | 8.06e-02 | 1.35e-03 |
 
-The current plot for this comparison is generated in [`notebooks/tests.ipynb`](notebooks/tests.ipynb); the table above is the source-of-truth summary.
+The current plot for this comparison is generated in [`notebooks/tests.ipynb`](notebooks/tests.ipynb); the table above is a representative summary, while the notebook is the executable source for current timings.
 
 Four distinct convergence regimes on one benchmark:
 
@@ -145,13 +165,15 @@ $\sigma = 0.12$, $\theta = -0.14$, $\nu = 0.2$, $r = 0.1$, $q = 0$, $S_0 = 100$,
 
 | | N=128 | N=256 | N=512 | N=1024 | N=2048 |
 |---|---|---|---|---|---|
-| error (T=0.1) | 6.97e-04 | 4.19e-06 | 6.80e-06 | 5.70e-07 | 7.98e-08 |
+| our error ($T=0.1$) | 5.43e-04 | 7.08e-05 | 3.80e-06 | 7.72e-07 | 1.41e-07 |
+| paper error | 5.43e-04 | 7.08e-05 | 3.80e-06 | 2.35e-05 | 1.41e-07 |
 
 | | N=30 | N=60 | N=90 | N=120 | N=150 |
 |---|---|---|---|---|---|
-| error (T=1.0) | 7.06e-03 | 1.29e-05 | 2.81e-07 | 3.16e-08 | 1.51e-09 |
+| our error ($T=1.0$) | 6.08e-04 | 1.89e-07 | 1.60e-08 | 5.97e-10 | 3.17e-12 |
+| paper error | 6.08e-04 | 1.89e-07 | 1.60e-08 | 5.97e-10 | 3.29e-12 |
 
-$T = 0.1$: **algebraic convergence** (order ≈ 3, expected for VG at short maturities where the CF decays slowly). $T = 1.0$: **exponential convergence** (~1.7 decades per 32 terms, R²=0.96). High-N cross-check at $N = 2^{14}$ agrees with the paper's reference values to sub-nanosecond precision.
+The notebook uses the original Fang-Oosterlee Table 7 truncation rules: $T=1$ uses $L=10$, while the short-maturity $T=0.1$ case uses $L=20$. The printed PDF header appears to swap the two reference prices, so the notebook reports the model-consistent maturities and keeps the paper error column beside our errors.
 
 ---
 
@@ -175,6 +197,8 @@ Parameters (paper Eq. 55): $S_0 = 100$, $K = 100$, $r = 0.1$, $q = 0$, $C = 1$, 
 | paper ms       | 0.0545 | 0.0589 | 0.0689 | 0.0690 | 0.0732 | 0.0748 |
 | our ms         | 0.0672 | 0.0666 | 0.0700 | 0.0688 | 0.0677 | 0.0687 |
 
+For Tables 8 and 9, the notebook prints both the paper reference and our high-$N$ internal COS reference. When those differ slightly, the high-$N$ error against the printed paper reference plateaus at that reference-convention difference rather than continuing to machine precision.
+
 **Table 10 — $Y = 1.98$** (Truncation range: $[-100, 20]$)
 | | N=20 | N=25 | N=30 | N=35 | N=40 |
 |---|---|---|---|---|---|
@@ -183,7 +207,7 @@ Parameters (paper Eq. 55): $S_0 = 100$, $K = 100$, $r = 0.1$, $q = 0$, $C = 1$, 
 | paper ms       | 0.0463 | 0.0438 | 0.0485 | 0.0511 | 0.0538 |
 | our ms         | 0.0676 | 0.0675 | 0.0683 | 0.0644 | 0.0663 |
 
-> **Note on Table 10.** We do **not** treat $Y = 1.98$ as a successful reproduction. For this near-stable CGMY case, our strict martingale implementation with the paper's stated $[-100,20]$ range converges to about `0.2601`, while the paper prints `0.252104475`. The large $N=20$ error is therefore shown as a caveat, not hidden. It likely reflects an implementation convention, branch/drift convention, or unstated numerical choice in the original paper; Carr-Madan is omitted in the presentation notebook for this case because the damped FFT overflows.
+> **Note on Table 10.** We do **not** treat $Y = 1.98$ as an exact reproduction. For this near-stable CGMY case, our strict martingale implementation with the paper's stated $[-100,20]$ range converges to about `0.2601`, while the paper prints `0.252104475`. The large $N=20$ error is therefore shown as part of the caveat. It likely reflects an implementation convention, branch/drift convention, or unstated numerical choice in the original paper; Carr-Madan is omitted in the presentation notebook for this case because the damped FFT overflows.
 
 ---
 
@@ -308,7 +332,12 @@ src/cos_pricing/
 ├── frft.py                    Bailey-Swarztrauber fractional FFT
 └── bermudan.py                Bermudan COS (Fang-Oosterlee 2009)
 
-pyfeng/sv_cos.py               PyFENG-compatible port (CosABC, BsmCos, CosSmileSetup, HestonCos)
+pyfeng/sv_cos.py               PyFENG-compatible COS base, BSM, reusable smile setup
+pyfeng/sv_heston_cos.py        PyFENG Heston COS port with optional smile/CV APIs
+pyfeng/lv_cos.py               PyFENG VG/CGMY COS ports with optional smile/CV APIs
+pyfeng/cos_range.py            PyFENG JP range helpers
+pyfeng/bermudan_cos.py         PyFENG Bermudan COS mixins/classes
+pyfeng/frft.py                 PyFENG FrFT mixins/classes
 ```
 
 ### Core formula (paper Eq. 21)
@@ -354,11 +383,12 @@ The source Heston pricer exposes an opt-in Black-Scholes control variate via `pr
 
 ## Test suite
 
-Latest local validation: `192 passed, 4 skipped`.
+Latest local validation: `232 passed, 4 skipped`.
 
 The test suite covers:
 
 - BSM ([test_cos_method.py](tests/test_cos_method.py)) — accuracy, convergence, vectorisation, put-call parity, scalar/array IO, deep-ITM/OTM edge cases.
+- Fixed-seed randomized robustness ([test_randomized_robustness.py](tests/test_randomized_robustness.py)) — finite vectorized prices and put-call parity across randomly sampled BSM, Heston, VG, and CGMY market/model parameters.
 - Strike-independent COS setup and JP ranges ([test_cos_method.py](tests/test_cos_method.py), [test_cos_range.py](tests/test_cos_range.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py)) — reusable smile coefficients, optional Junike-Pankrashkin Markov ranges, and PyFENG additive API consistency.
 - Heston ([test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py)) — paper benchmarks, convergence, $L$ sensitivity, put-call parity, input validation.
 - Black-Scholes control variate ([test_control_variate.py](tests/test_control_variate.py), [test_heston_cos_pricer.py](tests/test_heston_cos_pricer.py), [test_pyfeng_heston_cos.py](tests/test_pyfeng_heston_cos.py), [test_pyfeng_lv_cos.py](tests/test_pyfeng_lv_cos.py)) — Heston average-variance equivalent volatility, VG/CGMY variance-matched volatility, Joshi-Yang volatility selectors, correction identity, reusable-smile consistency, and coarse-grid error reduction where applicable.

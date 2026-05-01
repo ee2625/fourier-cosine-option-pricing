@@ -1,5 +1,9 @@
 """
-Reproduce Fang & Oosterlee (2008) Table 10 — CGMY, Y=1.98.
+Diagnostic for Fang & Oosterlee (2008) Table 10 -- CGMY, Y=1.98.
+
+This near-stable case is kept as a visible numerical-convention caveat:
+with the paper's printed range [-100, 20], the strict martingale convention
+used in this repo plateaus away from the paper's printed reference.
 """
 import os
 import sys
@@ -25,11 +29,10 @@ ROWS = [
 N_REPS = 2000
 
 def _collect():
-    # Initialize our new model
+    # Build the model and reuse the same density-side setup for timing.
     m = CgmyModel(**PARAMS)
     fwd, df = m._fwd_df(S0, T)
     
-    # Pre-compute CF and truncation range (Hoisting for speed!)
     cf = m.char_func(T)
     trunc = m.trunc_range(T, L)
 
@@ -39,7 +42,7 @@ def _collect():
         v = cos_price(cf, T, K, fwd, df, cp=1, n_cos=N, trunc_range=trunc)
         err = abs(float(v) - REF)
 
-        # 2. Calculate Runtime ([Teammate Reference] Matches table_2.py loop)
+        # 2. Calculate runtime using the same pricing call.
         t0 = time.perf_counter()
         for _ in range(N_REPS):
             cos_price(cf, T, K, fwd, df, cp=1, n_cos=N, trunc_range=trunc)
@@ -49,7 +52,7 @@ def _collect():
     return results
 
 def _print_text(results):
-    print(f"Fang-Oosterlee Table 8 reproducer (CGMY, Y={PARAMS['Y']})")
+    print(f"Fang-Oosterlee Table 10 diagnostic (CGMY, Y={PARAMS['Y']})")
     print(f"Reference value: {REF}")
     print()
     header = f"{'N':>4}  {'paper err':>10}  {'our err':>10}  {'paper ms':>9}  {'our ms':>8}"
@@ -58,10 +61,10 @@ def _print_text(results):
     for r in results:
         print(f"{r['N']:>4}  {r['paper_err']:>10.2e}  {r['err']:>10.2e}  "
               f"{r['paper_ms']:>9.4f}  {r['ms']:>8.4f}")
-    print("\nNote: Our CPU time should crush the paper's 2008 MATLAB benchmark.")
+    print("\nNote: this case is documented as a known numerical-convention caveat.")
 
 def _print_markdown(results):
-    """[Teammate Reference] Borrowed from test4.py for easy README updates."""
+    """Print a README-ready markdown table."""
     Ns = [r["N"] for r in results]
     print(f"### Table 10 reproduction — CGMY, Y={PARAMS['Y']}, T={T}, K={K}")
     print(f"Reference: {REF}")

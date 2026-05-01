@@ -26,11 +26,10 @@ ROWS = [
 N_REPS = 2000
 
 def _collect():
-    # Initialize our new model
+    # Build the model and reuse the same density-side setup for timing.
     m = CgmyModel(**PARAMS)
     fwd, df = m._fwd_df(S0, T)
     
-    # Pre-compute CF and truncation range (Hoisting for speed!)
     cf = m.char_func(T)
     trunc = m.trunc_range(T, L)
 
@@ -40,7 +39,7 @@ def _collect():
         v = cos_price(cf, T, K, fwd, df, cp=1, n_cos=N, trunc_range=trunc)
         err = abs(float(v) - REF)
 
-        # 2. Calculate Runtime ([Teammate Reference] Matches table_2.py loop)
+        # 2. Calculate runtime using the same pricing call.
         t0 = time.perf_counter()
         for _ in range(N_REPS):
             cos_price(cf, T, K, fwd, df, cp=1, n_cos=N, trunc_range=trunc)
@@ -59,10 +58,10 @@ def _print_text(results):
     for r in results:
         print(f"{r['N']:>4}  {r['paper_err']:>10.2e}  {r['err']:>10.2e}  "
               f"{r['paper_ms']:>9.4f}  {r['ms']:>8.4f}")
-    print("\nNote: Our CPU time should crush the paper's 2008 MATLAB benchmark.")
+    print("\nNote: runtime is machine-dependent; errors are the primary reproduction check.")
 
 def _print_markdown(results):
-    """[Teammate Reference] Borrowed from test4.py for easy README updates."""
+    """Print a README-ready markdown table."""
     Ns = [r["N"] for r in results]
     print(f"### Table 8 reproduction — CGMY, Y={PARAMS['Y']}, T={T}, K={K}")
     print(f"Reference: {REF}")

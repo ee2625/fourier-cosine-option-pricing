@@ -1,6 +1,6 @@
-# Presentation Q&A — anticipated questions and answers
+# Project Q&A
 
-A cheat sheet for the Thursday presentation. Organised by topic; each entry has the short answer first, then the math / code reference if you need to drill down. Cross-references to README sections in `[brackets]`.
+Questions and answers for explaining the COS method, the benchmark tables, the dimensional-analysis checks, and the post-presentation extensions. Each entry gives the short answer first, then the math or code reference if you need to drill down.
 
 ---
 
@@ -118,8 +118,8 @@ At short $T$, the CF decays only as $|u|^{-2T/\nu}$ — for $T = 0.1$, $\nu = 0.
 $$\varphi(u; T) = \exp\!\Big( i u w T + T\, C\, \Gamma(-Y)\, \big[(M - i u)^Y - M^Y + (G + i u)^Y - G^Y\big] \Big)$$
 where $w = -C \Gamma(-Y)\, [(M - 1)^Y - M^Y + (G + 1)^Y - G^Y]$ is the martingale drift correction. $C$ controls overall jump intensity (units: 1/time), $G$ and $M$ control the rate of jump-size decay (left and right tail), $Y$ controls how fine the jumps are (Y < 0: finite activity; 0 < Y < 1: infinite activity, finite variation; 1 < Y < 2: infinite activity AND infinite variation).
 
-### Q26. Why does Y = 1.98 break the paper's published bounds (Table 10)?
-For $Y$ very close to 2, the martingale drift $w$ becomes very large in magnitude (we measured $w \approx -87.5$). The density gets shifted heavily negative, and with the paper's stated bound $[-100, 20]$ the density is squeezed against the left edge. We can match the paper at $N = 25$ but plateau at $\sim 8 \times 10^{-3}$ from $N = 30$ onward because the boundary truncates the left tail. The paper reports machine precision at $N = 40$ — almost certainly using a wider unpublished bound (e.g. $[-300, 20]$).
+### Q26. Why does Y = 1.98 not reproduce cleanly in Table 10?
+For $Y$ very close to 2, the martingale drift $w$ becomes very large in magnitude (we measured $w \approx -87.5$). The density is shifted heavily negative, and with the paper's stated bound $[-100, 20]$ our strict martingale implementation plateaus about $8 \times 10^{-3}$ away from the printed reference. We keep this as a visible numerical-convention/reference caveat; possible causes include an unstated truncation range, branch/drift convention, or implementation detail in the original benchmark.
 
 ### Q27. Why doesn't VG / CGMY get analytic cumulants for free?
 They do, in the paper (VG: Table 11, CGMY: Eq. 56). We use them for the truncation range. The reason setting $[a, b]$ from cumulants is preferred over numerical-derivative estimation: the analytic formulas are exact and stable; numerical differentiation of $\log\varphi$ accumulates error.

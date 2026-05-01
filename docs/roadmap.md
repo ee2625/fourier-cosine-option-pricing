@@ -1,157 +1,89 @@
-# Roadmap — post-presentation extensions
+# Post-Presentation Extension Status
 
-Two extensions queued up for after the Thursday presentation. Both target the same practical use case: pricing a **whole volatility smile** (many strikes at the same maturity) faster and with tighter error control than the current engine.
+This document records the roadmap and current implementation status for the two post-presentation extensions: reusable strike-independent COS setup and Black-Scholes control variates. Both are implemented as opt-in additions; the baseline Fang-Oosterlee `price(...)` path remains unchanged.
 
-## Context: why this matters
+## Implemented
 
-The current `cos_price` engine already shares the heavy work — characteristic-function evaluation, truncation range, the `[a, b]` interval — across strikes. The dominant per-call cost is one $(M \times N)$ matrix-vector product, which is $M$ strikes for the cost of one. So smile pricing is already pretty fast.
+- **Reusable strike-independent setup in `cos_pricing`.** `CosSmileSetup`, `make_cos_smile_setup(...)`, and `cos_price_smile(...)` cache the density-side objects for a fixed model, expiry, forward, discount factor, and range. Strike-dependent payoff coefficients are still built vectorially, but characteristic-function samples and prime-weighted density coefficients are reused.
+- **PyFENG smile API.** `make_smile_setup(...)` and `price_smile(...)` are available on the PyFENG COS classes for BSM, Heston, VG, and CGMY. These methods are additive; existing `price(...)` calls keep the old behavior.
+- **Junike-Pankrashkin Markov range helpers.** BSM, VG, and CGMY expose analytic cumulants through order 8 and can request `trunc_range="jp"` / `jp_trunc_range(...)`. Heston keeps the Fang-Oosterlee sigma-h range by default until a dedicated high-order Heston moment estimator is added.
+- **Black-Scholes control variates.** Heston, VG, and CGMY expose opt-in `price_cv(...)` style methods. The simple method uses average variance for Heston and variance matching for VG/CGMY. The Joshi-Yang real-axis and half-contour volatility selectors are also implemented as explicit `vol_method` choices.
+- **Validation coverage.** Automated tests cover default-path preservation, smile setup equivalence, JP finite ranges, control-variate correction identities, PyFENG source consistency, and fixed-seed randomized robustness across BSM, Heston, VG, and CGMY.
 
-Where it can be sharper:
+## Why The Extensions Matter
 
-1. **The payoff coefficient $V_k$ still depends on $K$.** Look at [cos_method.py:90](../src/cos_pricing/cos_method.py#L90) — `log_kk = np.log(strike / fwd)` enters the trig phase $u_k \cdot \log(K/F)$, so the `(M, N)` matrix `W` is built per strike. With Junike-Pankrashkin (2022) and Le Floc'h (2020) we can factor this differently and do the heavy work once.
+The practical target is volatility-smile pricing: many strikes at the same maturity. The expensive density side of COS does not depend on strike, while the payoff boundary does. A reusable setup avoids rebuilding the density-side grid and CF samples for every smile call, and the control variate can reduce coarse-grid truncation error when the COS resolution is intentionally small.
 
-2. **Truncation-range error is bounded only heuristically.** The current rule (paper Eq. 49: $b - a = L \sqrt{|c_2| + \sqrt{|c_4|}}$ with $L = 10$ as a safety multiplier) is not tied to a target accuracy. Junike-Pankrashkin give a sharp upper bound on the COS truncation error → you can set $[a, b]$ to hit a target tolerance directly.
+## Strike-Independent COS Setup
 
-3. **No control variate.** The COS price has the form (true price) + (truncation error) + (series-truncation error). For the Black-Scholes case, the *exact* price is known. We can use that as a control variate against the COS price for any model whose Black-Scholes "equivalent vol" is computable. Joshi & Yang (2011) did this for FFT pricing. Doing it for COS with $\sigma_{\text{eq}} = \sqrt{E[\bar V_T]}$ (closed form for Heston) would be the new contribution.
+For a fixed model and expiry, the reusable objects are:
 
----
+- cosine grid `u_k = k*pi/(b-a)`
+- characteristic-function samples `phi(u_k)`
+- phase-shifted, prime-weighted real density coefficients
+- forward and discount factor
 
-## Extension A — Strike-independent COS engine (Junike-Pankrashkin 2022 + Le Floc'h 2020)
+The strike-dependent part is the payoff boundary `log(K/F)`, so payoff coefficients still depend on strike. The implementation therefore reuses the density side and vectorizes the payoff side over all strikes.
 
-### Reading list
-
-- **Junike, G. and Pankrashkin, K. (2022)** *Precise option pricing by the COS method — How to choose the truncation range.* Applied Mathematics and Computation 421:126935. <https://doi.org/10.1016/j.amc.2022.126935>
-- **Le Floc'h, F. (2020)** *More robust pricing of European options based on Fourier cosine series expansions.* SSRN. PDF in repo: [`More Robust Pricing of European Options Based on Fourier Cosine Series Expansions.pdf`](../More%20Robust%20Pricing%20of%20European%20Options%20Based%20on%20Fourier%20Cosine%20Series%20Expansions.pdf).
-- **Reference for current engine**: [`src/cos_pricing/cos_method.py`](../src/cos_pricing/cos_method.py).
-
-### What changes
-
-**Math.** Switch the cosine basis from $x = \log(S_T / F)$ (log-moneyness, mildly K-dependent via $F$) to $y = \log(S_T / S_0)$ (log-return, K-independent). Then:
-
-- Density coefficients $A_k = (2/(b - a)) \mathrm{Re}[\varphi_Y(u_k) \exp(-i u_k a)]$ are computed **once** for the whole smile.
-- Payoff coefficients $V_k(K) = \int_{\log(K/S_0)}^{b} (S_0 e^y - K) \cos(u_k (y - a))\, dy$ — the integration limit moves with $K$, but the integrand is structured so the closed form factors as
-  $$V_k(K) \;=\; S_0 \cdot \tilde\chi_k(\log(K/S_0), b) \;-\; K \cdot \tilde\psi_k(\log(K/S_0), b),$$
-  where $\tilde\chi_k$ and $\tilde\psi_k$ are closed-form integrals (chi/psi family), and the K-dependence enters only through $\sin(u_k \log(K/S_0))$ and $\cos(u_k \log(K/S_0))$ — one trig pair per $(K, k)$.
-- Vectorise: build the $(M, N)$ matrices of trig values in one shot (`np.outer`-style), then a single matvec gives all $M$ prices.
-
-**Truncation range.** Replace the cumulant heuristic with the Junike-Pankrashkin sharp bound: choose $[a, b]$ such that the truncation error is $\le \epsilon_{\text{tol}}$ (user-specified), via their explicit error formula. Le Floc'h's recipe is similar — both give $L$ as a function of $(\epsilon_{\text{tol}}, \text{model parameters})$ instead of a fixed safety multiplier.
-
-### API sketch
-
-Two pieces, both backwards-compatible:
+Main APIs:
 
 ```python
-# 1) New entry point with explicit error control:
-cos_price_smile(
-    char_func, texp, strikes, spot, intr=0.0, divr=0.0,
-    cp=1, n_cos=128, eps_tol=1e-10,                # NEW: target accuracy
-    cumulants=None,                                # OPTIONAL: pass exact cumulants
+from cos_pricing import make_cos_smile_setup
+
+setup = make_cos_smile_setup(cf, texp, fwd, df, n_cos=256, trunc_range=(a, b))
+prices = setup.price(strikes, cp=1)
+```
+
+PyFENG-style usage:
+
+```python
+setup = model.make_smile_setup(spot=100.0, texp=1.0)
+prices = setup.price(strikes, cp=1)
+
+setup_jp = model.make_smile_setup(
+    spot=100.0,
+    texp=1.0,
+    trunc_range="jp",
+    eps_tol=1e-8,
+    moment_order=8,
 )
-
-# 2) Existing cos_price() unchanged (legacy callers + tests don't break)
 ```
 
-Internally `cos_price_smile` computes:
-- Strike-independent: `cf_vals = char_func(u_arr)`, the centering phase, and the density coefficients `A_k`.
-- Strike-dependent (vectorised across all `M` strikes): `V_k(K)` via two trig matrices (one for $\sin$, one for $\cos$) plus the closed-form $\tilde\chi$ / $\tilde\psi$ formulas.
-- Final dot product: `prices = df * (V @ A)` — same `(M, N)` matvec cost as the existing engine but with a strike-independent `A`.
+## Junike-Pankrashkin Range Status
 
-### Implementation order
+The current JP implementation is the Markov-bound milestone:
 
-1. Read both papers carefully (start with Le Floc'h since the PDF is local).
-2. Derive the new $V_k(K)$ closed form on paper (one-page derivation).
-3. Implement `cos_price_smile()` alongside `cos_price()` — keep both working. Validate `cos_price_smile` reproduces every existing benchmark table to the same accuracy.
-4. Add Junike-Pankrashkin error-controlled $[a, b]$ as an optional path (`eps_tol=...` keyword).
-5. Write a benchmark example: time-vs-strike-count comparison of `cos_price` (M scaled cost) vs `cos_price_smile` (M ~ amortised cost).
-6. Coordinate with Nigel's team — they may already have partial work here.
+- `jp_markov_range(...)` converts an even central moment into a truncation interval.
+- BSM, VG, and CGMY provide analytic cumulants through order 8.
+- The JP path is not the default; callers must request it explicitly.
 
-### Validation plan
+Remaining JP work:
 
-- Every existing table (Tables 1, 2, 3, 4-6, 7, 8-10, Bermudan) must reproduce to current accuracy with the new engine.
-- Add a new benchmark in [examples/](../examples/): time per smile (e.g. 21 strikes from $\{50, 55, \ldots, 150\}$) under Heston, compared against the current engine.
-- Tests: replicate the existing strike-dependent tests but call `cos_price_smile` instead. Should be drop-in.
+- Add a Heston-specific high-order moment estimator. Junike-Pankrashkin Section 4.4 suggests approximating the 8th moment upfront rather than differentiating the Heston characteristic function on every calibration call.
+- Compare JP ranges with Le Floc'h-style ranges on the same parameter grid and document when each is tighter.
+- Coordinate with Nigel's team before changing any defaults.
 
----
+## Black-Scholes Control Variate Status
 
-## Extension B — Black-Scholes control variate
+The implemented correction is:
 
-### Reading list
-
-- **Joshi, M. S. and Yang, C. (2011)** *Fourier Transforms, Option Pricing and Controls.* SSRN Working Paper. <https://ssrn.com/abstract=1941464>
-- **Ball & Roma (1994)** for the closed-form Heston average variance: $E[\bar V_T] = \bar v + (v_0 - \bar v)(1 - e^{-\kappa T})/(\kappa T)$.
-
-### What changes
-
-**Math.** For any model with CF $\varphi$, define
-$$C_{\text{model}}(K) \;\approx\; \underbrace{C_{\text{model,COS}}(K)}_{\text{biased, fast}} \;+\; \underbrace{\big[\, C_{\text{BS,exact}}(K, \sigma_{\text{eq}}) - C_{\text{BS,COS}}(K, \sigma_{\text{eq}}) \,\big]}_{\text{control: truncation/series-truncation noise of the BS run, computed in closed form against the exact BS price}}$$
-
-The bracketed correction is the COS error for the BS model at the equivalent vol $\sigma_{\text{eq}}$. If this error is highly correlated with the COS error for the *target* model — which it is when both share the same $[a, b]$ truncation and $N$ series cutoff — the correction cancels most of the error, sharpening the answer for free.
-
-**Choice of $\sigma_{\text{eq}}$ — the user's suggestion: $\sigma_{\text{eq}} = \sqrt{E[\bar V_T]}$**, where $\bar V_T = (1/T) \int_0^T v_t\, dt$ is the average instantaneous variance.
-
-For Heston this has a closed form (Ball-Roma 1994):
-$$E[\bar V_T] \;=\; \bar v \;+\; (v_0 - \bar v) \cdot \frac{1 - e^{-\kappa T}}{\kappa T}.$$
-
-PyFENG's `HestonABC.avgvar_mv(texp)` returns the mean and variance of $\bar V_T$ — the first element is what we need.
-
-For VG, the analogous quantity is just the constant $\sigma^2 + \nu \theta^2$ (the second cumulant per unit time of the VG log-return process). For CGMY, it's $C \Gamma(2 - Y)(M^{Y-2} + G^{Y-2})$ (the variance per unit time of the CGMY process). Both are closed-form.
-
-**Why this is novel.** Joshi-Yang (2011) did the analogous thing for **Carr-Madan FFT pricing**. They use a more complicated $\sigma_{\text{eq}}$ choice that requires solving a non-linear equation. The PyFENG-based $\sigma_{\text{eq}} = \sqrt{E[\bar V_T]}$ is much simpler and is **strike-independent**, so it composes cleanly with Extension A — compute $\sigma_{\text{eq}}$ once, run two COS calls (target model + BS at $\sigma_{\text{eq}}$), apply the correction. Doing this for COS specifically is the publishable angle.
-
-### API sketch
-
-```python
-# Add an optional control_variate flag to the model price methods:
-m = HestonCOSPricer(S0=100, v0=0.04, ...)
-m.price_call(K=100.0, tau=1.0, N=64, control_variate=True)
-#                                    ^^^^^^^^^^^^^^^^^^^^
-# When True:
-#   1. Compute sigma_eq = sqrt(avgvar_mv(tau)[0])
-#   2. Compute C_BS_exact(K, sigma_eq) via closed-form BSM
-#   3. Compute C_BS_COS(K, sigma_eq) via the same N, L, [a, b] as the Heston run
-#   4. Return: C_Heston_COS + (C_BS_exact - C_BS_COS)
-
-# Free-function variant:
-price_call_heston_cv(S0, K, tau, ..., N, L)   # always uses the control variate
+```text
+model_COS + (BS_exact - BS_COS)
 ```
 
-### Validation plan
+The Black-Scholes COS leg uses the same COS-style range as the target model whenever possible, so the correction targets the same truncation/series error.
 
-- For Heston: at small $N$ (where COS error is non-negligible), the control variate should give an error reduction of 1-3 orders of magnitude. Plot error vs $N$ for both the plain and CV versions.
-- For VG / CGMY: similar.
-- Sanity: when the model **is** BSM, $\sigma_{\text{eq}} = \sigma$ exactly, and the CV formula collapses to $C_{\text{exact}}$ trivially — confirms no bias is introduced.
+Available volatility choices:
 
-### Implementation order
+- `vol_method="simple"`: average variance for Heston; variance matching for VG/CGMY.
+- `vol_method="joshi"`: Joshi-Yang real-axis derivative match.
+- `vol_method="joshi-half"`: Joshi-Yang eta=1/2 contour match.
 
-1. Implement first as a wrapper: `def price_with_cv(model, K, T, ...): ...` — calls the existing pricer twice and applies the correction.
-2. Validate error reduction on Heston / VG / CGMY at small $N$. Plot error-vs-N for plain vs CV.
-3. If the gain is meaningful, integrate into the model classes as a `control_variate=True` keyword.
+The notebook shows the expected behavior: control variates help most at coarse `N`; once COS has converged, the correction term is close to zero.
 
----
+## Remaining Work
 
-## Implementation sequencing
-
-Both extensions are independent. The cleanest order:
-
-1. **Extension B first (control variate)** — smaller, isolated, doesn't refactor existing code. Each model class gains an extra keyword. Can be merged without disrupting the Junike work in flight by Nigel's team.
-2. **Extension A second (strike-independent engine)** — bigger refactor. The new engine should support the control variate as well, so doing B first means the API is settled.
-
-Together, the engine becomes:
-- $M$ strikes priced for one matvec
-- One CF evaluation per smile
-- One BS-equivalent vol per smile, and one BS-COS run per smile, gives a control-variate corrected price for *every strike*
-- Truncation range tied to a target tolerance, not a heuristic
-
-This is the smile-pricing performance / accuracy frontier for any single-factor exponential-Lévy model, plus Heston via PyFENG's Heston-CGMY composition. Strong material for either an extended report or a follow-up paper.
-
----
-
-## Open questions for Erce / Nigel's team / prof
-
-1. **Junike-Pankrashkin vs Le Floc'h.** Both offer strike-independent ranges; do we adopt one or compose them? Le Floc'h's recipe is more practical (cumulant-based with explicit error term), Junike-Pankrashkin's bound is sharper but harder to evaluate. Erce's prof's note says J-P is "more advanced" — does that mean we go with J-P only, or use Le Floc'h as a sanity check?
-
-2. **For VG/CGMY: what's the right BS-equivalent vol?** $\sigma_{\text{eq}} = \sqrt{E[\bar V_T]}$ is natural for Heston (variance is a state). For pure-jump Lévy (VG, CGMY), the analogous quantity is the variance per unit time, but the "BS-like" payoff dynamics differ. May need to test empirically.
-
-3. **Heston Bermudan via 2D COS (Ruijter-Oosterlee 2012).** Adjacent to Extension A. Once the strike-independent engine is in place, the 2D Bermudan extension to Heston is a natural follow-on. Out of scope for these two extensions but worth flagging.
-
-4. **Coordinate with Nigel's team.** What's their current state on Junike implementation? May save us duplication.
+- Add Heston JP high-order moment support.
+- Add a larger smile benchmark grid that reports speedup versus strike count for scalar loops, vectorized `price(...)`, `price_smile(...)`, and `price_smile_cv(...)`.
+- Keep CGMY `Y=1.98` documented as a numerical-convention/reference caveat rather than presenting it as a clean reproduction.
+- If contributing upstream to PyFENG, keep all new APIs opt-in and discuss defaults with the maintainers first.
