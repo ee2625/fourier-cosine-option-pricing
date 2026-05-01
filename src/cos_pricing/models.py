@@ -14,6 +14,7 @@ Reference:
 
 import numpy as np
 from .cos_method import cos_price
+from .cos_range import central_moment_from_cumulants, jp_markov_range
 
 
 class BsmModel:
@@ -64,6 +65,27 @@ class BsmModel:
         c1   = -0.5 * s2t
         half = L * np.sqrt(s2t)
         return c1 - half, c1 + half
+
+    def jp_trunc_range(self, texp, eps_tol=1e-8, moment_order=8, payoff_bound=1.0):
+        """
+        Junike-Pankrashkin Markov range for log(S_T/F).
+
+        Uses the exact BSM cumulants, so even moments of the centered
+        log-return are exact for any even ``moment_order``.
+        """
+        s2t = self.sigma**2 * texp
+        cumulants = np.zeros(moment_order + 1, dtype=float)
+        cumulants[1] = -0.5 * s2t
+        cumulants[2] = s2t
+        central_moment = central_moment_from_cumulants(cumulants, moment_order)
+        return jp_markov_range(
+            center=cumulants[1],
+            variance=cumulants[2],
+            central_moment=central_moment,
+            eps_tol=eps_tol,
+            payoff_bound=payoff_bound,
+            moment_order=moment_order,
+        )
 
     def _fwd_df(self, spot, texp):
         df  = np.exp(-self.intr * texp)

@@ -26,6 +26,11 @@ from .frft import frft_price
 from .bermudan import BermudanCosBSM
 from .utils import bsm_price, bsm_impvol, convergence_table, benchmark_runtime
 from .cgmy_model import CgmyModel
+from .cos_range import (
+    central_moment_from_cumulants,
+    jp_markov_half_width,
+    jp_markov_range,
+)
 
 __all__ = [
     "cos_price",
@@ -48,4 +53,7 @@ __all__ = [
     "bsm_impvol",
     "convergence_table",
     "benchmark_runtime",
+    "central_moment_from_cumulants",
+    "jp_markov_half_width",
+    "jp_markov_range",
 ]

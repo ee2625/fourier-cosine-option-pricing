@@ -46,17 +46,43 @@ unless an explicit range is supplied.  For Heston, the setup uses the same
 F&O half-width as the Numba-backed `price(...)`, but translated into the
 strike-independent log-forward variable `log(S_T/F)`.
 
-## Next Milestone
+## Junike-Pankrashkin Milestone
 
-Add Junike-Pankrashkin range selection as an optional method, not as the default. Suggested API shape:
+Implemented the first optional JP range selector:
+
+- `jp_markov_range(...)` converts a central moment into the Corollary 9
+  Markov interval.
+- `BsmModel.jp_trunc_range(...)`, `VgModel.jp_trunc_range(...)`, and
+  `CgmyModel.jp_trunc_range(...)` provide exact model cumulants through
+  the requested even moment order.
+- PyFENG `CosABC.make_smile_setup(..., trunc_range="jp", eps_tol=...,
+  moment_order=..., payoff_bound=...)` can request the same range when the
+  model supplies JP cumulants.  BSM, VG, and CGMY provide analytic
+  cumulants through order 8.
+
+This is still not the default.  The existing F&O ranges remain unchanged
+unless the caller explicitly asks for `trunc_range="jp"` or calls
+`jp_trunc_range(...)`.
+
+## Remaining Milestone
+
+Add a Heston-specific high-order moment estimator.  JP Section 4.4 suggests
+approximating the 8th moment upfront, rather than differentiating the
+Heston characteristic function on every calibration call.  Until we add
+that estimator, Heston keeps its existing F&O sigma-h smile range by
+default.  Generic JP calls on Heston should use a lower supported moment
+order or a future Heston-specific moment approximation.
+
+Suggested API shape:
 
 ```python
-setup = make_cos_smile_setup(
-    char_func, texp, fwd, df,
-    n_cos=256,
+setup = model.make_smile_setup(
+    spot=100.0,
+    texp=1.0,
     trunc_range="jp",
     eps_tol=1e-10,
+    moment_order=8,
+    payoff_bound=1.0,
 )
+prices = setup.price(strikes, cp=1)
 ```
-
-The exact API can change after we finish translating the paper's Markov-inequality bound into model inputs.

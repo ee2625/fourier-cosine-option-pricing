@@ -18,6 +18,7 @@ This folder contains the COS method implementation integrated into
 - `lv_cos.py` — Lévy-process COS pricers:
   - `VarGammaCos` — Variance Gamma (matches `pf.VarGammaFft` signature).
   - `CgmyCos` — CGMY infinite-activity Lévy (matches `pf.CgmyFft` signature).
+- `cos_range.py` — Junike-Pankrashkin Markov truncation-range helpers.
 - `bermudan_cos.py` — Bermudan call/put pricing via the F&O 2009 backward
   induction.  `BermudanCosMixin` is a model-agnostic add-on for any 1-D
   Lévy `CosABC` subclass; `BermudanBsmCos`, `BermudanVgCos`, and
@@ -56,6 +57,16 @@ m.price(np.array([90, 100, 110]), 100, 1.0)
 setup = m.make_smile_setup(spot=100, texp=1.0)
 setup.price(np.array([80, 90, 100, 110, 120]), cp=1)
 
+# Optional Junike-Pankrashkin Markov range for models with analytic moments.
+setup_jp = m.make_smile_setup(
+    spot=100,
+    texp=1.0,
+    trunc_range="jp",
+    eps_tol=1e-8,
+    moment_order=8,
+    payoff_bound=1.0,
+)
+
 # Bermudan put under BSM with 50 equally-spaced exercise dates (~American).
 m_ber = pf.BermudanBsmCos(sigma=0.25, intr=0.10)
 m_ber.n_exercise = 50
@@ -68,6 +79,11 @@ For repeated calls at the same model/expiry/range, prefer
 caches the grid, characteristic-function samples, phase shift, and
 prime-weighted density coefficients.  The payoff coefficients remain
 strike-dependent and are rebuilt vectorially.
+
+`trunc_range="jp"` requests the Junike-Pankrashkin (2022) Markov range.
+BSM, Variance Gamma, and CGMY provide analytic cumulants through order 8.
+Heston keeps the F&O sigma-h range by default; a JP-style Heston 8th
+moment estimator is a separate follow-up.
 
 `numba` is optional. If installed, `HestonCos.price` runs the JIT kernel
 on first call (pay the cost upfront with `from pyfeng.sv_heston_cos import

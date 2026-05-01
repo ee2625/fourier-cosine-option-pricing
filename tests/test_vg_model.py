@@ -13,6 +13,8 @@ import pytest
 from scipy.stats import linregress
 from cos_pricing import VgModel, carr_madan_price
 
+_trapz = getattr(np, "trapezoid", np.trapz)
+
 # ── Table 7 parameters (Eq. 55) ───────────────────────────────────────────────
 S0, K, R, Q      = 100.0, 90.0, 0.1, 0.0
 SIGMA, THETA, NU = 0.12, -0.14, 0.2
@@ -159,10 +161,10 @@ class TestVgDensity:
     def test_integrates_to_one(self, model):
         for texp in [0.1, 1.0]:
             x, f = self._recover(model, texp)
-            assert abs(np.trapezoid(f, x) - 1.0) < 0.01, f"T={texp}: integral ≠ 1"
+            assert abs(_trapz(f, x) - 1.0) < 0.01, f"T={texp}: integral ≠ 1"
 
     def test_negative_skew(self, model):
         # theta < 0 => left-skewed => E[X] < 0
         for texp in [0.1, 1.0]:
             x, f = self._recover(model, texp)
-            assert np.trapezoid(x * f, x) < 0, f"T={texp}: expected negative mean"
+            assert _trapz(x * f, x) < 0, f"T={texp}: expected negative mean"

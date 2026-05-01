@@ -14,6 +14,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import opt_abc as opt
+from .cos_range import central_moment_from_cumulants, jp_markov_range
 
 __all__ = ["CosSmileSetup", "CosABC", "BsmCos", "HestonCos"]
 
@@ -164,6 +165,50 @@ class CosABC(opt.OptABC, abc.ABC):
         """
         return self._truncation_range(texp)
 
+    def _jp_cumulants(self, texp, order):
+        """
+        Cumulants for the Junike-Pankrashkin Markov range.
+
+        The base implementation supports orders 2 and 4 through the
+        existing ``_cumulants`` hook.  Models with analytic higher
+        cumulants should override this method.
+        """
+        if order > 4:
+            raise NotImplementedError(
+                f"{type(self).__name__} does not provide analytic cumulants "
+                f"through order {order}; use moment_order <= 4 or add a "
+                "model-specific _jp_cumulants override."
+            )
+        c1, c2, c3, c4 = self._cumulants(texp)
+        cumulants = np.zeros(order + 1, dtype=float)
+        cumulants[1] = c1
+        if order >= 2:
+            cumulants[2] = c2
+        if order >= 3:
+            cumulants[3] = c3
+        if order >= 4:
+            cumulants[4] = c4
+        return cumulants
+
+    def _jp_truncation_range(
+        self,
+        texp,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
+        """Junike-Pankrashkin Markov range in log(S_T/F)."""
+        cumulants = self._jp_cumulants(texp, moment_order)
+        central_moment = central_moment_from_cumulants(cumulants, moment_order)
+        return jp_markov_range(
+            center=cumulants[1],
+            variance=cumulants[2],
+            central_moment=central_moment,
+            eps_tol=eps_tol,
+            payoff_bound=payoff_bound,
+            moment_order=moment_order,
+        )
+
     # ------------------------------------------------------------------
     # Payoff coefficient helpers (F&O Eqs. 22-23)
     # ------------------------------------------------------------------
@@ -258,7 +303,15 @@ class CosABC(opt.OptABC, abc.ABC):
     # Pricing
     # ------------------------------------------------------------------
 
-    def make_smile_setup(self, spot, texp, trunc_range=None):
+    def make_smile_setup(
+        self,
+        spot,
+        texp,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
         """
         Build reusable strike-independent COS coefficients for a smile.
 
@@ -283,6 +336,15 @@ class CosABC(opt.OptABC, abc.ABC):
 
         if trunc_range is None:
             a, b = self._truncation_range(texp)
+        elif isinstance(trunc_range, str):
+            if trunc_range.lower() not in {"jp", "junike-pankrashkin"}:
+                raise ValueError(f"unknown trunc_range method {trunc_range!r}")
+            a, b = self._jp_truncation_range(
+                texp,
+                eps_tol=eps_tol,
+                moment_order=moment_order,
+                payoff_bound=payoff_bound,
+            )
         else:
             a, b = trunc_range
         a_arr = np.asarray(a, dtype=float)
@@ -312,7 +374,17 @@ class CosABC(opt.OptABC, abc.ABC):
             cf_re=cf_re,
         )
 
-    def price_smile(self, strike, spot, texp, cp=1, trunc_range=None):
+    def price_smile(
+        self,
+        strike,
+        spot,
+        texp,
+        cp=1,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
         """
         European call/put prices through a reusable strike-independent setup.
 
@@ -320,7 +392,14 @@ class CosABC(opt.OptABC, abc.ABC):
         will price several strike vectors; this convenience method builds the
         setup once and immediately prices ``strike``.
         """
-        setup = self.make_smile_setup(spot, texp, trunc_range=trunc_range)
+        setup = self.make_smile_setup(
+            spot,
+            texp,
+            trunc_range=trunc_range,
+            eps_tol=eps_tol,
+            moment_order=moment_order,
+            payoff_bound=payoff_bound,
+        )
         return setup.price(strike, cp=cp)
 
     def price(self, strike, spot, texp, cp=1):
@@ -364,6 +443,15 @@ class BsmCos(CosABC):
         """Exact BSM cumulants of log(S_T/F)."""
         s2t = self.sigma**2 * texp
         return -0.5 * s2t, s2t, 0.0, 0.0
+
+    def _jp_cumulants(self, texp, order):
+        """Exact BSM cumulants through any requested order."""
+        s2t = self.sigma**2 * texp
+        cumulants = np.zeros(order + 1, dtype=float)
+        cumulants[1] = -0.5 * s2t
+        if order >= 2:
+            cumulants[2] = s2t
+        return cumulants
 
 
 def __getattr__(name):

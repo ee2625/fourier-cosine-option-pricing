@@ -33,6 +33,7 @@ References:
 
 import numpy as np
 
+from .cos_range import cgmy_cumulants, vg_cumulants
 from .sv_cos import CosABC
 from .sv_fft import VarGammaFft, CgmyFft
 
@@ -134,6 +135,16 @@ class VarGammaCos(VarGammaFft, CosABC):
                     + 4.0 * sig2 * self.theta**2 * self.vov**2) * T
         return float(c1), float(c2), 0.0, float(c4)
 
+    def _jp_cumulants(self, texp, order):
+        """Analytic VG cumulants through ``order`` for the JP range."""
+        return vg_cumulants(
+            sigma=self.sigma,
+            theta=self.theta,
+            nu=self.vov,
+            texp=texp,
+            order=order,
+        )
+
 
 class CgmyCos(CgmyFft, CosABC):
     """
@@ -200,3 +211,14 @@ class CgmyCos(CgmyFft, CosABC):
         if np.isclose(self.Y, 1.98):
             return -100.0, 20.0
         return -self.L * self.Y, self.L * self.Y
+
+    def _jp_cumulants(self, texp, order):
+        """Analytic CGMY cumulants through ``order`` for the JP range."""
+        return cgmy_cumulants(
+            C=self.C,
+            G=self.G,
+            M=self.M,
+            Y=self.Y,
+            texp=texp,
+            order=order,
+        )

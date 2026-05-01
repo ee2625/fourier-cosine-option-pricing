@@ -7,6 +7,7 @@ Reference:
 """
 import numpy as np
 from .cos_method import cos_price
+from .cos_range import central_moment_from_cumulants, jp_markov_range, vg_cumulants
 
 
 class VgModel:
@@ -71,6 +72,30 @@ class VgModel:
                       + 4.0 * sig2 * self.theta ** 2 * self.nu ** 2) * texp
         half = L * np.sqrt(abs(c2) + np.sqrt(abs(c4)))
         return c1 - half, c1 + half
+
+    def jp_trunc_range(self, texp, eps_tol=1e-8, moment_order=8, payoff_bound=1.0):
+        """
+        Junike-Pankrashkin Markov range for log(S_T/F).
+
+        The VG cumulants are computed analytically from the cumulant
+        generating function, then converted to the requested central moment.
+        """
+        cumulants = vg_cumulants(
+            self.sigma,
+            self.theta,
+            self.nu,
+            texp,
+            moment_order,
+        )
+        central_moment = central_moment_from_cumulants(cumulants, moment_order)
+        return jp_markov_range(
+            center=cumulants[1],
+            variance=cumulants[2],
+            central_moment=central_moment,
+            eps_tol=eps_tol,
+            payoff_bound=payoff_bound,
+            moment_order=moment_order,
+        )
 
     def price(self, strike, spot, texp, cp=1, n_cos=128):
         """European option price via the COS method."""

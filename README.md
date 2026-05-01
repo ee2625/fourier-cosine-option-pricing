@@ -338,7 +338,7 @@ Changes 4–5 make the warm runtime fast; change 7 makes the cold runtime fast; 
 
 ### PyFENG integration
 
-A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile.
+A version of this implementation integrated into [PyFENG](https://github.com/PyFE/PyFENG) (Prof. Jaehyuk Choi's financial engineering package) lives in [`pyfeng/sv_cos.py`](pyfeng/sv_cos.py). It follows the PyFENG class hierarchy (`CosABC`, `BsmCos`, `HestonCos`) and is a drop-in alongside `HestonFft`. The PyFENG COS classes now also expose `make_smile_setup(...)` / `price_smile(...)` so one strike-independent density setup can be reused across a volatility smile. Passing `trunc_range="jp"` requests the optional Junike-Pankrashkin Markov range for models with analytic high-order cumulants.
 
 ---
 

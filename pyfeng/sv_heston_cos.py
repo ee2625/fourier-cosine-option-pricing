@@ -424,7 +424,15 @@ class HestonCos(HestonFft, CosABC):
         center = self._c1_logF(texp)
         return center - half, center + half
 
-    def make_smile_setup(self, spot, texp, trunc_range=None):
+    def make_smile_setup(
+        self,
+        spot,
+        texp,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
         """
         Build reusable strike-independent Heston COS coefficients.
 
@@ -435,10 +443,26 @@ class HestonCos(HestonFft, CosABC):
         if trunc_range is None:
             trunc_range = self._smile_truncation_range(texp)
         return CosABC.make_smile_setup(
-            self, spot, texp, trunc_range=trunc_range
+            self,
+            spot,
+            texp,
+            trunc_range=trunc_range,
+            eps_tol=eps_tol,
+            moment_order=moment_order,
+            payoff_bound=payoff_bound,
         )
 
-    def price_smile(self, strike, spot, texp, cp=1, trunc_range=None):
+    def price_smile(
+        self,
+        strike,
+        spot,
+        texp,
+        cp=1,
+        trunc_range=None,
+        eps_tol=1e-8,
+        moment_order=8,
+        payoff_bound=1.0,
+    ):
         """
         European Heston prices through a reusable strike-independent setup.
 
@@ -447,7 +471,14 @@ class HestonCos(HestonFft, CosABC):
         while this method exposes the reusable density coefficients needed
         for volatility-smile experiments.
         """
-        setup = self.make_smile_setup(spot, texp, trunc_range=trunc_range)
+        setup = self.make_smile_setup(
+            spot,
+            texp,
+            trunc_range=trunc_range,
+            eps_tol=eps_tol,
+            moment_order=moment_order,
+            payoff_bound=payoff_bound,
+        )
         return setup.price(strike, cp=cp)
 
     # ------------------------------------------------------------------

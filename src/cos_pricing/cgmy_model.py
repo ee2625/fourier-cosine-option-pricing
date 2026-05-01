@@ -8,6 +8,7 @@ Reference:
 import numpy as np
 from scipy.special import gamma
 from .cos_method import cos_price
+from .cos_range import central_moment_from_cumulants, cgmy_cumulants, jp_markov_range
 
 class CgmyModel:
     """
@@ -50,6 +51,31 @@ class CgmyModel:
         if np.isclose(self.Y, 1.98):
             return -100.0, 20.0
         return -L * self.Y, L * self.Y
+
+    def jp_trunc_range(self, texp, eps_tol=1e-8, moment_order=8, payoff_bound=1.0):
+        """
+        Junike-Pankrashkin Markov range for log(S_T/F).
+
+        Uses analytic CGMY cumulants through ``moment_order``.  Avoid exact
+        singular values of Y, as in the characteristic-function code.
+        """
+        cumulants = cgmy_cumulants(
+            self.C,
+            self.G,
+            self.M,
+            self.Y,
+            texp,
+            moment_order,
+        )
+        central_moment = central_moment_from_cumulants(cumulants, moment_order)
+        return jp_markov_range(
+            center=cumulants[1],
+            variance=cumulants[2],
+            central_moment=central_moment,
+            eps_tol=eps_tol,
+            payoff_bound=payoff_bound,
+            moment_order=moment_order,
+        )
 
     def _fwd_df(self, spot, texp):
         df = np.exp(-self.intr * texp)
