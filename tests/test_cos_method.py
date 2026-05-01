@@ -7,7 +7,13 @@ Run with:
 
 import numpy as np
 import pytest
-from cos_pricing import BsmModel, bsm_price, cos_price
+from cos_pricing import (
+    BsmModel,
+    bsm_price,
+    cos_price,
+    cos_price_smile,
+    make_cos_smile_setup,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -141,3 +147,60 @@ class TestCosEngine:
                       n_cos=128, trunc_range=(-3.0, 3.0))
         ref = bsm_price(100.0, 100.0, 0.2, 1.0)
         assert abs(p - ref) < 1e-6
+
+    def test_cos_price_smile_matches_cos_price(self):
+        """Strike-independent smile path matches the legacy vector path."""
+        m = BsmModel(sigma=0.25, intr=0.03, divr=0.01)
+        spot, texp = 100.0, 0.75
+        fwd, df = m._fwd_df(spot, texp)
+        strikes = np.linspace(70.0, 130.0, 13)
+        trunc = m.trunc_range(texp)
+
+        legacy = cos_price(
+            m.char_func(texp), texp, strikes, fwd, df,
+            cp=1, n_cos=160, trunc_range=trunc,
+        )
+        smile = cos_price_smile(
+            m.char_func(texp), texp, strikes, fwd, df,
+            cp=1, n_cos=160, trunc_range=trunc,
+        )
+
+        assert np.max(np.abs(smile - legacy)) < 1e-13
+
+    def test_cos_smile_setup_reuses_density_coefficients(self):
+        """A setup calls the CF once and can price multiple strike vectors."""
+        sigma, texp = 0.2, 1.0
+        fwd, df = 100.0, 0.97
+        calls = []
+
+        def cf(u):
+            calls.append(np.asarray(u).copy())
+            return np.exp(-0.5 * sigma**2 * texp * u * (u + 1j))
+
+        setup = make_cos_smile_setup(
+            cf, texp, fwd, df, n_cos=128, trunc_range=(-4.0, 4.0),
+        )
+        p1 = setup.price(np.array([90.0, 100.0, 110.0]), cp=1)
+        p2 = setup.price(np.array([95.0, 105.0]), cp=-1)
+
+        assert len(calls) == 1
+        assert p1.shape == (3,)
+        assert p2.shape == (2,)
+
+    def test_cos_price_smile_mixed_cp_broadcasts(self):
+        """Smile setup handles mixed call/put flags."""
+        m = BsmModel(sigma=0.18, intr=0.04, divr=0.0)
+        spot, texp = 100.0, 1.3
+        fwd, df = m._fwd_df(spot, texp)
+        strikes = np.array([80.0, 95.0, 100.0, 110.0, 125.0])
+        cp = np.array([1, -1, 1, -1, 1])
+        trunc = m.trunc_range(texp)
+
+        got = cos_price_smile(
+            m.char_func(texp), texp, strikes, fwd, df,
+            cp=cp, n_cos=192, trunc_range=trunc,
+        )
+        ref = bsm_price(strikes, spot, m.sigma, texp, m.intr, m.divr, cp=cp)
+
+        assert got.shape == strikes.shape
+        assert np.max(np.abs(got - ref)) < 1e-10

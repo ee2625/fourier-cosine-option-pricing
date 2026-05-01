@@ -10,7 +10,136 @@ Reference:
     https://doi.org/10.1137/080718061
 """
 
+from dataclasses import dataclass
+
 import numpy as np
+
+
+@dataclass(frozen=True)
+class CosSmileSetup:
+    """
+    Reusable strike-independent COS setup for a fixed model, expiry, and range.
+
+    The expensive density-side objects only depend on the characteristic
+    function, expiry, and integration range: the cosine grid, CF samples, phase
+    shift, and prime-weighted real coefficients.  A volatility smile changes the
+    payoff boundary ``log(K/F)`` but can reuse these density coefficients.
+    """
+
+    fwd: float
+    df: float
+    texp: float
+    a: float
+    b: float
+    n_cos: int
+    u_arr: np.ndarray
+    cf_re: np.ndarray
+
+    def price(self, strike, cp=1):
+        """
+        Price one or many strikes using the cached COS density coefficients.
+
+        Parameters
+        ----------
+        strike : float or array
+        cp     : +1 call / -1 put, scalar or broadcast-compatible with strike
+        """
+        strike_a, cp_a = np.broadcast_arrays(
+            np.asarray(strike, dtype=float),
+            np.asarray(cp, dtype=float),
+        )
+        scalar_out = strike_a.shape == ()
+
+        strike_flat = np.atleast_1d(strike_a).reshape(-1)
+        cp_flat = np.atleast_1d(cp_a).reshape(-1)
+        kk = strike_flat / self.fwd
+
+        w_payoff = _vanilla_payoff_matrix(
+            kk=kk,
+            cp=cp_flat,
+            a=self.a,
+            b=self.b,
+            u_arr=self.u_arr,
+        )
+        price_arr = self.df * self.fwd * (w_payoff @ self.cf_re)
+
+        if scalar_out:
+            return float(price_arr[0])
+        return price_arr.reshape(strike_a.shape)
+
+
+def make_cos_smile_setup(
+    char_func,
+    texp,
+    fwd,
+    df,
+    n_cos=128,
+    trunc_range=None,
+):
+    """
+    Build reusable COS density coefficients for a whole strike smile.
+
+    This is intentionally additive: it does not change ``cos_price``.  The
+    first implementation milestone uses an explicit or legacy truncation range;
+    Junike-Pankrashkin range selection can be added later behind this setup.
+    """
+    if trunc_range is None:
+        a, b = _truncation_range_from_cf(char_func, n_cos)
+    else:
+        a, b = trunc_range
+    a = float(a)
+    b = float(b)
+    if not np.isfinite(a) or not np.isfinite(b) or not b > a:
+        raise ValueError(f"trunc_range must satisfy finite a < b, got {(a, b)}")
+
+    n_cos = int(n_cos)
+    if n_cos < 1:
+        raise ValueError(f"n_cos must be >= 1, got {n_cos}")
+
+    k_arr = np.arange(n_cos)
+    u_arr = k_arr * (np.pi / (b - a))
+    cf = char_func(u_arr)
+    cf_s = cf * np.exp(-1j * u_arr * a)
+    cf_s[0] *= 0.5
+
+    return CosSmileSetup(
+        fwd=float(fwd),
+        df=float(df),
+        texp=float(texp),
+        a=a,
+        b=b,
+        n_cos=n_cos,
+        u_arr=u_arr,
+        cf_re=cf_s.real,
+    )
+
+
+def cos_price_smile(
+    char_func,
+    texp,
+    strike,
+    fwd,
+    df,
+    cp=1,
+    n_cos=128,
+    trunc_range=None,
+):
+    """
+    Price a strike vector through a reusable strike-independent COS setup.
+
+    This convenience wrapper builds a ``CosSmileSetup`` and prices immediately.
+    Use ``make_cos_smile_setup`` directly when repeatedly pricing the same
+    model/expiry/range with different strike vectors or call/put flags.
+    """
+    setup = make_cos_smile_setup(
+        char_func=char_func,
+        texp=texp,
+        fwd=fwd,
+        df=df,
+        n_cos=n_cos,
+        trunc_range=trunc_range,
+    )
+    return setup.price(strike, cp=cp)
 
 
 def cos_price(
@@ -138,6 +267,59 @@ def cos_price(
     return price_arr.reshape(
         np.broadcast_shapes(np.shape(strike), np.shape(cp))
     )
+
+
+def _vanilla_payoff_matrix(kk, cp, a, b, u_arr):
+    """
+    Payoff-side COS matrix for normalized strikes kk = K/F on fixed [a, b].
+
+    This helper is shared by the reusable smile setup.  It mirrors the optimized
+    payoff logic in ``cos_price`` while accepting already-built frequencies.
+    """
+    kk = np.atleast_1d(np.asarray(kk, dtype=float)).reshape(-1)
+    cp_a = np.broadcast_to(
+        np.atleast_1d(np.asarray(cp, dtype=float)).reshape(-1),
+        kk.shape,
+    )
+
+    n_cos = len(u_arr)
+    ba = b - a
+    k_arr = np.arange(n_cos)
+    u = u_arr[None, :]
+    k = k_arr[None, :]
+    kk_c = kk[:, None]
+    log_kk = np.clip(np.log(kk), a, b)[:, None]
+
+    phase = u * (log_kk - a)
+    cos_ph = np.cos(phase)
+    sin_ph = np.sin(phase)
+    safe_u = np.where(k == 0, 1.0, u)
+    sign_k = (-1.0) ** k_arr
+    exp_b = np.exp(b)
+    exp_a = np.exp(a)
+    inv_1u2 = 1.0 / (1.0 + u_arr**2)
+
+    all_calls = bool(np.all(cp_a > 0))
+    all_puts = bool(np.all(cp_a < 0))
+
+    if all_calls:
+        chi = (sign_k * exp_b - kk_c * (cos_ph + u * sin_ph)) * inv_1u2
+        psi = np.where(k == 0, b - log_kk, -sin_ph / safe_u)
+        return (2.0 / ba) * (chi - kk_c * psi)
+
+    if all_puts:
+        chi = (kk_c * (cos_ph + u * sin_ph) - exp_a) * inv_1u2
+        psi = np.where(k == 0, log_kk - a, sin_ph / safe_u)
+        return (2.0 / ba) * (kk_c * psi - chi)
+
+    chi = (sign_k * exp_b - kk_c * (cos_ph + u * sin_ph)) * inv_1u2
+    psi = np.where(k == 0, b - log_kk, -sin_ph / safe_u)
+    w_call = (2.0 / ba) * (chi - kk_c * psi)
+    chi_full = (sign_k * exp_b - exp_a) * inv_1u2
+    delta = np.broadcast_to((2.0 / ba) * chi_full, (len(kk), n_cos)).copy()
+    delta[:, 0] -= 2.0 * kk
+    w_put = w_call - delta
+    return np.where(cp_a[:, None] > 0, w_call, w_put)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ Reference:
     https://doi.org/10.1137/080718061
 """
 
-from .cos_method import cos_price
+from .cos_method import CosSmileSetup, cos_price, cos_price_smile, make_cos_smile_setup
 from .models import BsmModel
 from .heston_cos_pricer import (
     HestonCOSPricer,
@@ -29,6 +29,9 @@ from .cgmy_model import CgmyModel
 
 __all__ = [
     "cos_price",
+    "cos_price_smile",
+    "make_cos_smile_setup",
+    "CosSmileSetup",
     "BsmModel",
     "HestonCOSPricer",
     "price_call_heston",
