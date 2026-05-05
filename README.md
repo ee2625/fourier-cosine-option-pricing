@@ -379,6 +379,16 @@ The presentation notebook [notebooks/tests.ipynb](notebooks/tests.ipynb) include
 
 The source Heston pricer exposes an opt-in Black-Scholes control variate via `price_cv(...)`, `price_call_cv(...)`, and `price_put_cv(...)`. The default equivalent volatility is the simple baseline: Heston uses `sqrt(E[average variance])`, while VG and CGMY use variance matching, `sigma_eq = sqrt(c2/T)`, where `c2` is the second cumulant of `log(S_T/F)`. The advanced Joshi-Yang selectors are also opt-in through `vol_method="joshi"` (real-axis derivative match, Eq. 3.5) and `vol_method="joshi-half"` (eta=1/2 contour match, Eq. 3.4). The default `price(...)` path is unchanged for every model. The same idea is mirrored in the PyFENG Heston/VG/CGMY ports through `price_cv(...)` and `price_smile_cv(...)`.
 
+**Effectiveness.** The CV correction $C_{\text{model}}^{\text{COS}} + (C_{\text{BSM}}^{\text{exact}} - C_{\text{BSM}}^{\text{COS}})$ pays off when the COS grid is still coarse enough that the BSM-COS leg has a measurable truncation/series error of its own — the bracketed term then cancels most of the corresponding error in the target model. Once $N$ is large enough that the BSM-COS leg has converged, the bracketed term is essentially zero and the CV neither helps nor hurts. Headline numbers from notebook §10.3:
+
+| Model | Coarse $N$ | Plain COS error | Best CV method | Best CV error | Improvement |
+|---|---:|---:|---|---:|---:|
+| Heston       |  8 | 4.02248 | Joshi-Yang real-axis        | 0.303819 | **13.2×** |
+| VG           | 16 | 0.476249 | Joshi-Yang real-axis       | 0.128903 | **3.7×** |
+| CGMY ($Y=0.5$) | 16 | 8.95118 | Simple variance-matched CV | 2.34875  | **3.8×** |
+
+Past N≈40, the rows collapse to plain-COS error for all three models — once COS has converged, the correction term is at machine epsilon. The full per-$N$ breakdown plus a comparison of the three `vol_method` choices lives in [notebooks/tests.ipynb §10.3](notebooks/tests.ipynb).
+
 ---
 
 ## Test suite
