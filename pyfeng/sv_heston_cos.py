@@ -801,21 +801,80 @@ class HestonCos(HestonFft, CosABC):
             np.atleast_1d(np.asarray(cp, dtype=np.float64)), K_arr.shape
         )
 
+        # Resolve pricing formula (PR #199 / Le Floc'h alignment).
+        method, L_kernel = self._resolve_pricing_formula(float(texp), L_value)
+
         # Uniform cp -> single kernel call. Mixed cp -> run both, mux on sign.
         first = float(cp_arr.flat[0])
         uniform = bool(np.all(cp_arr == first))
 
-        if uniform:
+        if method == "lefloch":
+            # Always compute the put via the kernel (numerically clean) and
+            # convert to call via put-call parity for cp > 0 entries.
+            puts = self._kernel_dispatch(F, K_arr, float(texp), df, -1, L_kernel)
+            calls = puts + df * (F - K_arr)
+            if uniform:
+                prices = calls if first > 0 else puts
+            else:
+                prices = np.where(cp_arr > 0, calls, puts)
+        elif uniform:
             cp_int = 1 if first > 0 else -1
-            prices = self._kernel_dispatch(F, K_arr, float(texp), df, cp_int, L_value)
+            prices = self._kernel_dispatch(F, K_arr, float(texp), df, cp_int, L_kernel)
         else:
-            calls = self._kernel_dispatch(F, K_arr, float(texp), df,  1, L_value)
-            puts  = self._kernel_dispatch(F, K_arr, float(texp), df, -1, L_value)
+            calls = self._kernel_dispatch(F, K_arr, float(texp), df,  1, L_kernel)
+            puts  = self._kernel_dispatch(F, K_arr, float(texp), df, -1, L_kernel)
             prices = np.where(cp_arr > 0, calls, puts)
 
         if scalar_in:
             return float(prices[0])
         return prices.reshape(np.broadcast_shapes(np.shape(strike), np.shape(cp)))
+
+    # Le Floc'h auto-switch (PR #199 alignment) ------------------------------
+
+    pricing_formula     = "auto"
+    HIGH_KURTOSIS_RATIO = 2.0
+
+    def _extended_cumulants(self, tau, eps=1e-3):
+        """(c1, c2, c4) of log(S_T/F) via FD on log MGF."""
+        K_log = lambda uu: float(np.log(self.mgf_logprice(uu, tau)).real)
+        K0 = K_log(0.0)
+        K1p, K1m = K_log(eps), K_log(-eps)
+        K2p, K2m = K_log(2 * eps), K_log(-2 * eps)
+        c1 = (K1p - K1m) / (2 * eps)
+        c2 = (K1p + K1m - 2 * K0) / eps**2
+        c4 = (K2p - 4 * K1p + 6 * K0 - 4 * K1m + K2m) / eps**4
+        return float(c1), float(c2), float(c4)
+
+    def _resolve_pricing_formula(self, tau, L_value):
+        """Pick pricing path; return (method, L for kernel).
+
+        In ``"auto"`` mode, switch to Le Floc'h when the F&O Eq. 49 width
+        sqrt(|c2| + sqrt(|c4|)) is more than ``HIGH_KURTOSIS_RATIO`` times
+        the bare sqrt(|c2|) -- i.e. when c4 is so large that the density
+        is heavy-tailed and the direct call formula's chi(b) loses
+        precision.  Tables 4-6 sit at ratio ~1.6 (no switch); the
+        prof's stress case sits at ratio ~3.3 (switch)."""
+        method = (self.pricing_formula or "auto").lower()
+        if method not in ("auto", "lefloch", "fang-oosterlee"):
+            raise ValueError(f"pricing_formula must be auto / lefloch / "
+                             f"fang-oosterlee; got {self.pricing_formula!r}")
+        sigma_h    = self._sigma_h()
+        sigma_half = L_value * sigma_h
+        if method == "fang-oosterlee":
+            return "fang-oosterlee", L_value
+        _, c2, c4 = self._extended_cumulants(tau)
+        # Use L*sqrt(|c2|) for the Le Floc'h interval (NOT the c4-inflated
+        # Eq. 49); see the note in cos_pricing/heston_cos_pricer.py.
+        if method == "lefloch":
+            c2_half = L_value * float(np.sqrt(abs(c2)))
+            return "lefloch", max(sigma_half, c2_half) / sigma_h
+        if abs(c2) <= 0:
+            return "fang-oosterlee", L_value
+        kurtosis_ratio = float(np.sqrt(abs(c2) + np.sqrt(abs(c4))) / np.sqrt(abs(c2)))
+        if kurtosis_ratio > self.HIGH_KURTOSIS_RATIO:
+            c2_half = L_value * float(np.sqrt(abs(c2)))
+            return "lefloch", max(sigma_half, c2_half) / sigma_h
+        return "fang-oosterlee", L_value
 
     def _kernel_dispatch(self, F, K_arr, tau, df, cp_int, L_value):
         """Dispatch to scalar or vector kernel based on ``K_arr`` size."""

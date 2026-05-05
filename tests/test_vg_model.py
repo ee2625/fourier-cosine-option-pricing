@@ -13,7 +13,7 @@ import pytest
 from scipy.stats import linregress
 from cos_pricing import VgModel, carr_madan_price
 
-_trapz = getattr(np, "trapezoid", np.trapz)
+_trapz = getattr(np, "trapezoid", None) or np.trapz  # numpy 2.x removed trapz
 
 # ── Table 7 parameters (Eq. 55) ───────────────────────────────────────────────
 S0, K, R, Q      = 100.0, 90.0, 0.1, 0.0

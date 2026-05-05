@@ -275,6 +275,20 @@ class HestonCOSPricer:
 
     _CACHE_CAP = 64
 
+    # Pricing-formula attribute (PR #199 / Le Floc'h 2020 alignment).
+    #
+    # Default 'auto' uses the fast Fang-Oosterlee kernel for moderate parameter
+    # sets (matches Tables 4-6 reproductions exactly) and automatically switches
+    # to Le Floc'h's put + put-call parity formula when the density's kurtosis
+    # is high enough that the F&O Eq. 49 width's c4 term inflates the width
+    # significantly -- the heavy-tail regime where the call's direct chi
+    # formula loses precision.  Trigger: ratio
+    #     sqrt(|c2| + sqrt(|c4|)) / sqrt(|c2|)  >  HIGH_KURTOSIS_RATIO
+    # which is ~1.6 for paper Tables 4-6 (no switch) and ~3.3 for the
+    # high-vov long-T stress case (switch).
+    pricing_formula     = "auto"
+    HIGH_KURTOSIS_RATIO = 2.0
+
     def __init__(self, S0, v0, lam, eta, ubar, rho, r=0.0, q=0.0):
         """Store parameters, validate ranges (rho in (-1,1); v0, lam, eta, ubar > 0)."""
         if v0 <= 0.0:
@@ -314,6 +328,71 @@ class HestonCOSPricer:
     # Pricing -- dispatches to the jitted kernels with caching
     # ------------------------------------------------------------------------
 
+    def _extended_cumulants(self, tau, eps=1e-3):
+        """(c1, c2, c4) of log(S_T/S0) via finite-difference of log MGF.
+        Used by the auto-detector and the Le Floc'h path to pick a
+        cumulant-rule truncation interval.  c1 is also returned analytically
+        via _c1; here we use FD for consistency with c2, c4."""
+        K_log = lambda uu: float(np.log(self.mgf_logprice(uu, tau)).real)
+        K0    = K_log(0.0)
+        K1p, K1m = K_log(eps), K_log(-eps)
+        K2p, K2m = K_log(2 * eps), K_log(-2 * eps)
+        c1 = (K1p - K1m) / (2 * eps)
+        c2 = (K1p + K1m - 2 * K0) / eps**2
+        c4 = (K2p - 4 * K1p + 6 * K0 - 4 * K1m + K2m) / eps**4
+        return float(c1), float(c2), float(c4)
+
+    def _cumulant_half_width(self, tau, L_value, include_c4=False):
+        """F&O Eq. 49 half-width.  ``include_c4=False`` is the practical
+        default for high-vov regimes: c4 can be 100x larger than c2 and would
+        inflate the interval to a width that requires N ~ 8000 to resolve.
+        Using ``L * sqrt(|c2|)`` alone tracks the density's actual width
+        (one standard deviation) and keeps the COS series tractable at
+        default N.  ``include_c4=True`` recovers the full Eq. 49 rule for
+        callers that want a strict mathematical bound."""
+        _, c2, c4 = self._extended_cumulants(tau)
+        if include_c4:
+            return L_value * float(np.sqrt(abs(c2) + np.sqrt(abs(c4))))
+        return L_value * float(np.sqrt(abs(c2)))
+
+    def _resolve_pricing_formula(self, cp, tau, L_value):
+        """Decide which pricing formula to use for this call.
+
+        Returns either 'fang-oosterlee' (use the existing fast kernel as-is)
+        or 'lefloch' (compute put then add put-call parity for cp == 1).
+        Le Floc'h is only triggered when cp == 1 since the put-side chi
+        formula is already numerically clean (no e^b)."""
+        method = (self.pricing_formula or "auto").lower()
+        if method not in ("auto", "lefloch", "fang-oosterlee"):
+            raise ValueError(f"pricing_formula must be auto / lefloch / "
+                             f"fang-oosterlee; got {self.pricing_formula!r}")
+        if cp != 1:
+            # Put side is numerically stable; never need Le Floc'h.
+            return "fang-oosterlee", L_value
+        if method == "fang-oosterlee":
+            return "fang-oosterlee", L_value
+        # When switching to Le Floc'h, use L * sqrt(|c2|) for the half-width,
+        # NOT the full F&O Eq. 49 with c4 inflation -- the c4 term blows the
+        # interval up to widths that need N ~ 8000 to resolve, while sqrt(|c2|)
+        # tracks one density standard deviation and converges at N ~ 160-512.
+        # Put + parity makes the wider interval numerically safe (no e^b in
+        # the put's chi), so we don't need the c4-inflated interval to fight
+        # truncation; we just need it wide enough to capture the density body.
+        if method == "lefloch":
+            sigma_half = L_value * self._sigma_h
+            c2_half    = L_value * float(np.sqrt(abs(self._extended_cumulants(tau)[1])))
+            return "lefloch", max(sigma_half, c2_half) / self._sigma_h
+        # Auto: trigger on kurtosis blow-up of Eq. 49.
+        _, c2, c4 = self._extended_cumulants(tau)
+        if abs(c2) <= 0:
+            return "fang-oosterlee", L_value
+        kurtosis_ratio = float(np.sqrt(abs(c2) + np.sqrt(abs(c4))) / np.sqrt(abs(c2)))
+        if kurtosis_ratio > self.HIGH_KURTOSIS_RATIO:
+            sigma_half = L_value * self._sigma_h
+            c2_half    = L_value * float(np.sqrt(abs(c2)))
+            return "lefloch", max(sigma_half, c2_half) / self._sigma_h
+        return "fang-oosterlee", L_value
+
     def price(self, K, tau, cp=1, N=160, L=None):
         """European price (call cp=+1, put cp=-1) at strike(s) K and maturity tau."""
         if tau <= 0.0:
@@ -325,21 +404,29 @@ class HestonCOSPricer:
         scalar_in = np.isscalar(K)
         K_arr     = np.atleast_1d(np.asarray(K, dtype=np.float64))
 
-        key = (K_arr.tobytes(), float(tau), int(N), L_value, int(cp))
+        method, L_kernel = self._resolve_pricing_formula(int(cp), float(tau), L_value)
+        kernel_cp = -1 if method == "lefloch" else int(cp)
+
+        key = (K_arr.tobytes(), float(tau), int(N), L_kernel, kernel_cp, method)
         hit = self._cache.get(key)
         if hit is None:
             if K_arr.size == 1:
                 hit = np.array([_heston_cos_kernel(
                     self.S0, float(K_arr[0]), float(tau), self.v0,
                     self.lam, self.eta, self.ubar, self.rho,
-                    self.r, self.q, int(cp), int(N), L_value,
+                    self.r, self.q, kernel_cp, int(N), L_kernel,
                 )])
             else:
                 hit = _heston_cos_vec_kernel(
                     self.S0, np.ascontiguousarray(K_arr), float(tau), self.v0,
                     self.lam, self.eta, self.ubar, self.rho,
-                    self.r, self.q, int(cp), int(N), L_value,
+                    self.r, self.q, kernel_cp, int(N), L_kernel,
                 )
+            if method == "lefloch":
+                # Convert put -> call via PCP.  fwd = S0 * exp((r-q)*tau).
+                fwd = self.S0 * np.exp((self.r - self.q) * float(tau))
+                df  = float(np.exp(-self.r * float(tau)))
+                hit = hit + df * (fwd - K_arr)
             if len(self._cache) >= self._CACHE_CAP:
                 self._cache.pop(next(iter(self._cache)))
             self._cache[key] = hit

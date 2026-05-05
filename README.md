@@ -24,6 +24,13 @@ The default `price(...)` path remains the baseline Fang-Oosterlee COS implementa
 ## Known caveats
 
 - **CGMY $Y=1.98$ Table 10.** We do not present this near-stable CGMY case as an exact reproduction. With the paper's stated range $[-100,20]$, our strict martingale convention converges to about `0.2601`, while the paper prints `0.252104475`. The notebook keeps this visible as a numerical-convention/reference caveat.
+- **Validated stress envelope** ([examples/stress_envelope_audit.py](examples/stress_envelope_audit.py)). The original direct call formula in F&O 2008 contains $e^b$ in the closed-form $\chi$ integral, which loses float64 precision once $b > {\sim}25$. That happens for **Heston with high vov + long $T$** (e.g. vov=1.0, $T=10$, $\rho=-0.9$ — Prof. J. Choi's reported case in [issue #14](https://github.com/ee2625/fourier-cosine-option-pricing/issues/14)) and for **CGMY at $Y \geq 1.7$** with moderate-to-long $T$. Both regimes now auto-switch to **Le Floc'h's put + put-call-parity formula** (`pricing_formula='auto'`, default), where the put-side $\chi$ uses $e^a$ (small) and remains numerically clean. After the fix the validated envelope is:
+  - **Heston**: 30 / 40 PASS, 10 / 40 DEGRADED, **0 / 40 BROKEN** (was 6 broken before).
+  - **VG**: 18 / 20 PASS, 2 / 20 DEGRADED, **0 / 20 BROKEN** (unchanged — VG never had a stress failure).
+  - **CGMY**: 29 / 32 PASS, 0 / 32 DEGRADED, 3 / 32 BROKEN (was 6 broken before; residual is $Y \in \{1.9, 1.95\}$ at $T \in \{2, 5\}$ — edge of COS applicability).
+  - **Bermudan put** ([examples/bermudan_stress_audit.py](examples/bermudan_stress_audit.py)): 24 / 24 PASS, 0 monotonicity violations across $\sigma \in \{0.1, 0.2, 0.4, 0.7, 1.0, 1.5\}$ and $T \in \{0.1, 1, 5, 10\}$. The Bermudan put dodges the bug entirely because it prices the put directly (no $e^b$ in the chi-side; only $e^a$ at the small lower limit).
+
+  Set `m.pricing_formula = 'fang-oosterlee'` to opt out of the auto-switch (only matters for the formerly broken cells), or `m.pricing_formula = 'lefloch'` to force the put + parity path everywhere. Defaults preserve all paper-benchmark Tables 1–10 reproductions.
 
 ## Quick start
 

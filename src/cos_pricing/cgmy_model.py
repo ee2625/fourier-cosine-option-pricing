@@ -131,8 +131,46 @@ class CgmyModel:
             strike, spot, texp, cp=cp, n_cos=n_cos, L=L, vol_method=vol_method
         )
 
+    # ── Le Floc'h auto-switch (PR #199 alignment) ───────────────────────────
+    pricing_formula = "auto"
+    HIGH_Y_THRESHOLD = 1.7  # Y >= 1.7 -> truncation [-L*Y, L*Y] >= [-17, 17],
+                            # e^17 ~ 2.4e7; chi formula starts losing precision
+
     def price(self, strike, spot, texp, cp=1, n_cos=128, L=10.0):
-        """European option price via the COS method."""
-        fwd, df = self._fwd_df(spot, texp)
+        """European option price via the COS method.
+
+        For ``cp == 1`` and high-Y regimes (Y >= ``HIGH_Y_THRESHOLD``) where
+        the call's chi formula overflows due to e^b at the wide truncation
+        boundary, switches to Le Floc'h's put + put-call parity unless
+        ``pricing_formula='fang-oosterlee'`` is explicitly set."""
+        fwd, df    = self._fwd_df(spot, texp)
+        method     = (self.pricing_formula or "auto").lower()
+        if method not in ("auto", "lefloch", "fang-oosterlee"):
+            raise ValueError(f"pricing_formula must be auto / lefloch / "
+                             f"fang-oosterlee; got {self.pricing_formula!r}")
+
+        # Per-input cp may be a vector; for the auto-switch we only need to
+        # know whether *any* call is requested.
+        cp_arr = np.atleast_1d(np.asarray(cp))
+        any_call = bool(np.any(cp_arr > 0))
+        switch = (
+            method == "lefloch"
+            or (method == "auto" and any_call and self.Y >= self.HIGH_Y_THRESHOLD)
+        )
+
+        if switch and any_call:
+            # Compute everything on the put side (numerically clean), then
+            # apply parity to recover the call positions.
+            puts = cos_price(self.char_func(texp), texp, strike, fwd, df,
+                             cp=-1, n_cos=n_cos,
+                             trunc_range=self.trunc_range(texp, L))
+            strike_arr = np.atleast_1d(np.asarray(strike, dtype=float))
+            calls = puts + df * (fwd - strike_arr)
+            cp_b = np.broadcast_to(cp_arr.astype(float), strike_arr.shape)
+            result = np.where(cp_b > 0, calls, puts)
+            if np.isscalar(strike) and np.isscalar(cp):
+                return float(result[0])
+            return result.reshape(np.broadcast_shapes(np.shape(strike),
+                                                       np.shape(cp)))
         return cos_price(self.char_func(texp), texp, strike, fwd, df,
                          cp=cp, n_cos=n_cos, trunc_range=self.trunc_range(texp, L))
